@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三國魚機・武將爭霸</title>
+  <link rel="stylesheet" href="./style.css" />
+  <!-- Three.js 由 Vite 從 node_modules 解析 (見 src/*.js 的 import 'three') -->
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="scene"></canvas>
+
+    <!-- 頂部跑馬燈 -->
+    <div id="marquee-bar">
+      <div id="marquee-text"></div>
+    </div>
+
+    <!-- 左上房間資訊 -->
+    <div id="top-left">
+      <div class="room-badge">📜 群雄・81房</div>
+      <div class="rank-badge">🏆 即時排行</div>
+    </div>
+
+    <!-- 大獎彈窗 -->
+    <div id="jackpot" class="hidden">
+      <div class="jackpot-inner">
+        <div class="jackpot-title">恭喜捕獲</div>
+        <div class="jackpot-name" id="jackpot-name">呂布</div>
+        <div class="jackpot-amount" id="jackpot-amount">131,400</div>
+        <div class="jackpot-sub">籌碼入袋！</div>
+      </div>
+    </div>
+
+    <!-- 底部控制列 -->
+    <div id="hud">
+      <div class="hud-left">
+        <div class="coin-box">
+          <span class="coin-icon">🪙</span>
+          <span id="coin-value">100,000</span>
+        </div>
+      </div>
+      <div class="hud-center">
+        <button id="bet-down" class="round-btn">−</button>
+        <div class="bet-box">
+          <div class="bet-label">下注</div>
+          <div id="bet-value">50</div>
+        </div>
+        <button id="bet-up" class="round-btn">＋</button>
+      </div>
+      <div class="hud-right">
+        <button id="auto-btn" class="side-btn">自動<br>OFF</button>
+        <button id="weapon-btn" class="side-btn">武將<br>關羽</button>
+      </div>
+    </div>
+
+    <!-- 開場提示 -->
+    <div id="intro">
+      <div class="intro-card">
+        <h1>三國魚機・武將爭霸</h1>
+        <p>點擊戰場發射武將攻擊，擊倒三國小兵與敵將以奪取籌碼！</p>
+        <ul>
+          <li>🖱️ 點擊 / 按住畫面 = 朝目標開火（每發消耗一次下注）</li>
+          <li>➕➖ 調整下注倍率，倍率越高獎勵越大</li>
+          <li>🗡️ 刀兵 / 槍兵 / 弓兵 血量與獎勵不同</li>
+          <li>👑 敵將（呂布）為大獎目標</li>
+        </ul>
+        <button id="start-btn">進入戰場</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

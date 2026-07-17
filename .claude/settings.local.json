@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py --version)",
+      "Bash(npx --version)",
+      "PowerShell(npm install)",
+      "PowerShell(npm run build 2>&1)"
+    ]
+  }
+}

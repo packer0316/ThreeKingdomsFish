@@ -1,0 +1,291 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05070d;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: #fff;
+  user-select: none;
+}
+
+#game-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- 跑馬燈 ---------- */
+#marquee-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 34px;
+  background: linear-gradient(90deg, rgba(60,20,10,.85), rgba(120,40,20,.7), rgba(60,20,10,.85));
+  border-bottom: 1px solid rgba(255,200,120,.4);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  z-index: 20;
+}
+#marquee-text {
+  white-space: nowrap;
+  color: #ffd77a;
+  font-weight: 700;
+  font-size: 15px;
+  padding-left: 100%;
+  animation: marquee 22s linear infinite;
+  text-shadow: 0 1px 2px #000;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+/* ---------- 左上 ---------- */
+#top-left {
+  position: absolute;
+  top: 44px; left: 12px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.room-badge, .rank-badge {
+  background: linear-gradient(180deg, #2b4a8a, #16264a);
+  border: 1px solid rgba(140,180,255,.5);
+  padding: 6px 14px;
+  border-radius: 18px;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.rank-badge {
+  background: linear-gradient(180deg, #7a1f1f, #4a1010);
+  border-color: rgba(255,160,120,.5);
+}
+
+/* ---------- HUD 底部 ---------- */
+#hud {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  background: linear-gradient(0deg, rgba(6,10,20,.9), rgba(6,10,20,0));
+  z-index: 15;
+}
+.hud-left, .hud-center, .hud-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.coin-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(180deg, #1c2f14, #0d1a08);
+  border: 2px solid #6dd44a;
+  border-radius: 22px;
+  padding: 8px 18px;
+  min-width: 180px;
+}
+.coin-icon { font-size: 22px; }
+#coin-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffe27a;
+  text-shadow: 0 1px 2px #000;
+}
+
+.round-btn {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: none;
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, #4aa3ff, #1657c4);
+  box-shadow: 0 3px 0 #0d2f6b, 0 5px 10px rgba(0,0,0,.5);
+  cursor: pointer;
+}
+.round-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #0d2f6b; }
+
+.bet-box {
+  text-align: center;
+  background: linear-gradient(180deg, #3a2b12, #1c1406);
+  border: 2px solid #e0b64a;
+  border-radius: 16px;
+  padding: 6px 22px;
+  min-width: 110px;
+}
+.bet-label { font-size: 12px; color: #d9c48a; }
+#bet-value { font-size: 24px; font-weight: 800; color: #ffe27a; }
+
+.side-btn {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: none;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.15;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0,0,0,.4), 0 5px 10px rgba(0,0,0,.5);
+}
+#auto-btn { background: radial-gradient(circle at 35% 30%, #63d95a, #1f8a2a); }
+#auto-btn.on { background: radial-gradient(circle at 35% 30%, #ffd24a, #c47a10); color:#3a2500; }
+#weapon-btn { background: radial-gradient(circle at 35% 30%, #ff8a5a, #b83010); }
+
+/* ---------- 左右玩家座位 ---------- */
+.seat {
+  position: absolute;
+  bottom: 100px;
+  z-index: 16;
+  width: 170px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(20,32,60,.92), rgba(8,14,28,.92));
+  border: 1px solid rgba(140,180,255,.45);
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5);
+}
+.seat-left  { left: 14px;  border-color: rgba(120,220,150,.55); }
+.seat-right { right: 14px; border-color: rgba(255,150,120,.55); }
+.seat-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffe9b0;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #b9c9e6;
+  margin: 2px 0 5px;
+}
+.seat-bet { color: #ffd77a; font-weight: 700; }
+.seat-coin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,.35);
+  border-radius: 10px;
+  padding: 3px 8px;
+}
+.seat-coin .coin-icon { font-size: 15px; }
+.seat-coin-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffe27a;
+  text-shadow: 0 1px 2px #000;
+}
+.seat.flash { animation: seatFlash .5s ease-out; }
+@keyframes seatFlash {
+  0%   { box-shadow: 0 0 0 rgba(255,220,120,0); }
+  40%  { box-shadow: 0 0 20px rgba(255,220,120,.9); border-color: #ffe27a; }
+  100% { box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+}
+
+/* ---------- 大獎彈窗 ---------- */
+#jackpot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+}
+#jackpot.hidden { display: none; }
+.jackpot-inner {
+  text-align: center;
+  padding: 30px 60px;
+  background: radial-gradient(circle, rgba(80,30,10,.92), rgba(30,10,5,.92));
+  border: 3px solid #ffcf5a;
+  border-radius: 20px;
+  box-shadow: 0 0 60px rgba(255,180,60,.8);
+  animation: pop .4s ease-out;
+}
+@keyframes pop {
+  0% { transform: scale(.4); opacity: 0; }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.jackpot-title { font-size: 22px; color: #ffe9b0; }
+.jackpot-name  { font-size: 48px; font-weight: 900; color: #ffcf3a; margin: 6px 0; text-shadow: 0 2px 8px #000; }
+.jackpot-amount{ font-size: 40px; font-weight: 900; color: #fff; text-shadow: 0 0 12px #ffb; }
+.jackpot-sub   { font-size: 18px; color: #ffd77a; margin-top: 6px; }
+
+/* ---------- 開場 ---------- */
+#intro {
+  position: absolute;
+  inset: 0;
+  background: rgba(4,8,16,.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+#intro.hidden { display: none; }
+.intro-card {
+  width: min(560px, 90vw);
+  background: linear-gradient(180deg, #1a2a4d, #0c1428);
+  border: 2px solid #d8b45a;
+  border-radius: 18px;
+  padding: 32px 34px;
+  box-shadow: 0 0 40px rgba(0,0,0,.7);
+}
+.intro-card h1 {
+  font-size: 30px;
+  color: #ffd77a;
+  text-align: center;
+  margin-bottom: 14px;
+  text-shadow: 0 2px 6px #000;
+}
+.intro-card p { color: #cfe0ff; margin-bottom: 14px; line-height: 1.6; }
+.intro-card ul { margin: 0 0 22px 4px; list-style: none; }
+.intro-card li { color: #b9c9e6; padding: 5px 0; font-size: 15px; }
+#start-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #3a2500;
+  background: linear-gradient(180deg, #ffdf80, #e0a83a);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #a87410;
+}
+#start-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a87410; }
+
+/* 浮動獎勵數字 */
+.float-coin {
+  position: absolute;
+  color: #ffe27a;
+  font-weight: 900;
+  font-size: 20px;
+  text-shadow: 0 2px 4px #000;
+  pointer-events: none;
+  z-index: 18;
+  animation: floatUp 1s ease-out forwards;
+}
+@keyframes floatUp {
+  0%   { transform: translateY(0) scale(.6); opacity: 0; }
+  20%  { opacity: 1; transform: translateY(-6px) scale(1.1); }
+  100% { transform: translateY(-50px) scale(1); opacity: 0; }
+}
