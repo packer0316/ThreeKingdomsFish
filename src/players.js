@@ -217,6 +217,52 @@ export class MeleeGeneral {
     this.mesh.rotation.y = this.facing;
     scene.add(this.mesh);
 
+    // 本機玩家識別光圈：半透明底環搭配兩層反向旋轉的亮弧。
+    this.haloTime = 0;
+    this.halo = new THREE.Group();
+    this.halo.position.y = 0.07;            // 稍微離地，避免與地面閃爍
+    this.mesh.add(this.halo);
+
+    this.haloBaseMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffc94a,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const baseGeometry = new THREE.RingGeometry(1.42, 1.72, 64);
+    baseGeometry.rotateX(-Math.PI / 2);
+    this.halo.add(new THREE.Mesh(baseGeometry, this.haloBaseMaterial));
+
+    this.haloArcs = new THREE.Group();
+    this.haloArcMaterial = new THREE.MeshBasicMaterial({
+      color: 0xfff1a3,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const arcGeometry = new THREE.RingGeometry(1.5, 1.84, 32, 1, 0, Math.PI * 0.38);
+    arcGeometry.rotateX(-Math.PI / 2);
+    for (let i = 0; i < 3; i++) {
+      const arc = new THREE.Mesh(arcGeometry, this.haloArcMaterial);
+      arc.rotation.y = (Math.PI * 2 * i) / 3;
+      this.haloArcs.add(arc);
+    }
+    this.halo.add(this.haloArcs);
+
+    this.haloOuterArcs = new THREE.Group();
+    const outerArcGeometry = new THREE.RingGeometry(1.9, 2.02, 32, 1, 0, Math.PI * 0.26);
+    outerArcGeometry.rotateX(-Math.PI / 2);
+    for (let i = 0; i < 4; i++) {
+      const arc = new THREE.Mesh(outerArcGeometry, this.haloArcMaterial);
+      arc.rotation.y = (Math.PI * i) / 2;
+      this.haloOuterArcs.add(arc);
+    }
+    this.halo.add(this.haloOuterArcs);
+
     this.mixer = null;
     this.actions = {};
     this.currentAction = null;
@@ -311,6 +357,12 @@ export class MeleeGeneral {
   // cmd: { attack: bool, auto: bool, point: THREE.Vector3 }
   update(dt, cmd) {
     if (this.mixer) this.mixer.update(dt);
+    this.haloTime += dt;
+    this.haloArcs.rotation.y += dt * 2.2;
+    this.haloOuterArcs.rotation.y -= dt * 1.35;
+    const pulse = (Math.sin(this.haloTime * 4) + 1) * 0.5;
+    this.haloBaseMaterial.opacity = 0.2 + pulse * 0.12;
+    this.haloArcMaterial.opacity = 0.72 + pulse * 0.2;
     if (!this.ready) return;            // 模型尚未載入
 
     this.holdTimer = Math.max(0, this.holdTimer - dt);
