@@ -3,7 +3,7 @@ import { FIELD } from './config.js';
 
 // 虎牢關戰場場景 ------------------------------------------------
 // 以幾片 Plane + 幾何模型 + ambientCG 的 CC0 PBR 貼圖組成逼真的關隘：
-// 石板道、碎石地、兩側岩壁、虎牢關城牆與城樓、木製關門、烽火盆與旗幟。
+// 石板道、碎石地、兩側岩石群（中段留通道）、虎牢關城牆與城樓、木製關門、烽火盆與旗幟。
 
 THREE.Cache.enabled = true; // 讓同一張貼圖只下載一次
 
@@ -170,19 +170,23 @@ function buildGround(scene) {
   scene.add(road);
 }
 
-// ---------- 兩側岩壁：以幾塊大石體堆出關隘峽谷 ----------
+// ---------- 兩側岩石：前後各一組岩石群，中段留出小兵進場的通道 ----------
 function buildCliffs(scene) {
   const rockMat = pbrMat('cliff', 3, 3, { roughness: 1 });
   const boulderMat = pbrMat('cliff', 1.4, 1.4, { roughness: 1 });
 
+  // 小兵從左右邊界橫向行軍進場（活動縱深 z ∈ [FIELD.minZ, FIELD.maxZ]），
+  // 這條縱深帶的兩側完全不放岩石，只在後方（靠城牆）與前方（靠鏡頭）各堆一組，
+  // 讓側面留出看得見的通道。
   for (const side of [-1, 1]) {
     const group = new THREE.Group();
-    // 主體：數塊傾斜的大石塊，向內傾以框住通道
     const blocks = [
-      { x: 33, y: 8, z: -6,  w: 20, h: 26, d: 26, rx: 0.05, rz: -0.12 },
-      { x: 30, y: 6, z: -26, w: 22, h: 22, d: 22, rx: -0.08, rz: -0.16 },
-      { x: 36, y: 11, z: 10, w: 18, h: 30, d: 24, rx: 0.02, rz: -0.08 },
-      { x: 28, y: 4, z: -34, w: 16, h: 18, d: 18, rx: 0.1, rz: -0.2 },
+      // 後組：接住城牆兩端、擋住牆後空景
+      { x: 34, y: 7, z: -31, w: 18, h: 24, d: 14, rx: 0.05, rz: -0.12 },
+      { x: 27, y: 4, z: -37, w: 14, h: 16, d: 14, rx: 0.1,  rz: -0.2 },
+      // 前組：框住畫面邊緣，不伸入通道
+      { x: 35, y: 8, z: 11,  w: 18, h: 26, d: 18, rx: 0.02, rz: -0.08 },
+      { x: 28, y: 3, z: 6,   w: 12, h: 12, d: 9,  rx: 0.08, rz: -0.16 },
     ];
     for (const b of blocks) {
       const geo = new THREE.BoxGeometry(b.w, b.h, b.d, 2, 2, 2);
@@ -193,17 +197,23 @@ function buildCliffs(scene) {
       m.castShadow = m.receiveShadow = true;
       group.add(m);
     }
-    // 散落的巨石
-    for (let i = 0; i < 5; i++) {
-      const r = 1.6 + (i % 3) * 0.9;
-      const geo = new THREE.IcosahedronGeometry(r, 1);
-      jitter(geo, r * 0.28);
+    // 散落的巨石：點綴通道口兩旁與遠處，不踩進小兵的行軍帶
+    const boulders = [
+      { x: 24, z: 3,   r: 2.2 },
+      { x: 30, z: 1.5, r: 1.5 },
+      { x: 23, z: -24, r: 1.8 },
+      { x: 29, z: -26, r: 2.4 },
+      { x: 43, z: -11, r: 3.2 }, // 通道遠端的孤石，暗示路往場外延伸
+    ];
+    boulders.forEach((b, i) => {
+      const geo = new THREE.IcosahedronGeometry(b.r, 1);
+      jitter(geo, b.r * 0.28);
       const rock = new THREE.Mesh(geo, boulderMat);
-      rock.position.set(side * (20 + (i * 3) % 8), r * 0.6, -2 - i * 6);
+      rock.position.set(side * b.x, b.r * 0.6, b.z);
       rock.rotation.set(i, i * 1.3, i * 0.7);
       rock.castShadow = rock.receiveShadow = true;
       group.add(rock);
-    }
+    });
     scene.add(group);
   }
 }
