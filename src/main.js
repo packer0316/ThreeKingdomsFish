@@ -1,16 +1,38 @@
 import * as THREE from 'three';
-import { createWorld } from './scene.js';
+import { createWorld, updateSceneFx } from './scene.js';
 import { EnemyManager } from './enemies.js';
 import { BulletManager } from './bullets.js';
-import { makeGeneralTurret, makeCoin } from './models.js';
+import { makeCoin } from './models.js';
 import { UI } from './ui.js';
-import { AIPlayer } from './players.js';
+import { AIPlayer, MeleeGeneral } from './players.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
 
+// 偵測是否真的用 GPU 硬體加速；若瀏覽器退回軟體渲染會非常慢，跳出提示。
+function reportGPU(renderer) {
+  const gl = renderer.getContext();
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const name = (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '';
+  const software = /swiftshader|software|llvmpipe|basic render|microsoft basic/i.test(name);
+  console.log(`[GPU] 繪圖裝置：${name || '未知'}｜硬體加速：${software ? '❌ 軟體渲染（很慢）' : '✅ 已啟用'}`);
+  if (!software) return;
+
+  const bar = document.createElement('div');
+  bar.style.cssText =
+    'position:absolute;left:0;right:0;top:34px;z-index:60;padding:10px 16px;' +
+    'background:linear-gradient(90deg,#7a1010,#b83010);color:#ffe9b0;font-weight:700;' +
+    'font-size:14px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.6);cursor:pointer;';
+  bar.innerHTML =
+    `⚠ 目前為「軟體渲染」（未使用 GPU），這是遊戲很慢的主因。` +
+    `請到瀏覽器設定開啟「使用硬體加速」後重開分頁。（點此關閉）`;
+  bar.addEventListener('click', () => bar.remove());
+  document.getElementById('game-root').appendChild(bar);
+}
+
 const canvas = document.getElementById('scene');
 const { renderer, scene, camera } = createWorld(canvas);
+reportGPU(renderer);
 
 const state = { coins: START_COINS };
 const ui = new UI(state);
@@ -18,41 +40,21 @@ const ui = new UI(state);
 const enemyMgr = new EnemyManager(scene);
 const bulletMgr = new BulletManager(scene);
 
-// ---------- 玩家武將砲台 ----------
-let turret = buildTurret(GENERALS[0]);
-scene.add(turret);
+// ---------- 中座玩家：近戰武將 ----------
+const hero = new MeleeGeneral(scene, GENERALS[0], enemyMgr, attemptSlash);
+ui.onGeneralChange = (def) => hero.setGeneral(def);
 
-ui.onGeneralChange = (def) => {
-  scene.remove(turret);
-  turret = buildTurret(def);
-  scene.add(turret);
-};
-
-// ---------- 左右兩側 AI 陪玩玩家 ----------
+// ---------- 左右兩側 AI 陪玩玩家（遠程砲台）----------
 const aiPlayers = AI_PLAYERS.map(
   (def) => new AIPlayer(scene, def, bulletMgr, enemyMgr, ui.el.root)
 );
 
-function buildTurret(def) {
-  const t = makeGeneralTurret(def);
-  t.position.set(0, 0, FIELD.turretZ);
-  // 砲口標記，用於取得世界座標
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 1.6, t.userData.muzzleZ);
-  t.userData.head.add(muzzle);
-  t.userData.muzzle = muzzle;
-  t.userData.def = def;
-  return t;
-}
-
-// ---------- 輸入：瞄準與開火 ----------
+// ---------- 輸入：指定攻擊目標點 ----------
 const raycaster = new THREE.Raycaster();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const pointer = new THREE.Vector2();
-const target = new THREE.Vector3(0, 1.4, -8); // 目前瞄準點
+const target = new THREE.Vector3(0, 1.4, -8); // 目前指定的攻擊點
 let firing = false;
-let fireCooldown = 0;
-const FIRE_INTERVAL = 0.14;
 
 function updatePointer(e) {
   const rect = renderer.domElement.getBoundingClientRect();
@@ -68,37 +70,39 @@ function updatePointer(e) {
 
 canvas.addEventListener('pointerdown', (e) => {
   updatePointer(e);
-  firing = true;
-  fireCooldown = 0; // 立即開火
+  firing = true; // 按住 = 命令武將前往最接近該點的敵人砍殺
 });
 canvas.addEventListener('pointermove', (e) => { if (firing) updatePointer(e); });
 window.addEventListener('pointerup', () => { firing = false; });
 
-// ---------- 瞄準轉向與開火 ----------
-function aimAt(point) {
-  const head = turret.userData.head;
-  const dx = point.x - turret.position.x;
-  const dz = point.z - turret.position.z;
-  head.rotation.y = Math.atan2(-dx, -dz);
-}
-
-function doFire() {
+// ---------- 近戰揮刀：由 MeleeGeneral 呼叫 ----------
+// 回傳 true = 成功攻擊（籌碼足夠）；false = 籌碼不足
+function attemptSlash(enemy) {
   const bet = ui.bet;
-  if (state.coins < bet) return; // 籌碼不足
+  if (state.coins < bet) return false;
 
   state.coins -= bet;
   ui.refresh();
 
-  const muzzleWorld = new THREE.Vector3();
-  turret.userData.muzzle.getWorldPosition(muzzleWorld);
+  spawnSpark(enemy.mesh.position.clone().setY(1.6));
+  const power = 1 + Math.floor(ui.betIndex / 2); // 下注越高、刀傷越高
+  const killed = enemy.hit(power);
+  if (killed) {
+    enemy.dead = true;
+    const reward = Math.floor(bet * enemy.value);
+    state.coins += reward;
+    ui.refresh();
 
-  const dir = new THREE.Vector3().subVectors(target, muzzleWorld).normalize();
-  const power = 1 + Math.floor(ui.betIndex / 2); // 下注越高、火力越猛
-  const color = turret.userData.def.blade;
-  bulletMgr.fire(muzzleWorld, dir, power, color);
+    const s = worldToScreen(enemy.mesh.position.clone().setY(2));
+    ui.floatCoin(s.x, s.y, reward);
+    burstCoins(enemy.mesh.position.clone());
+    if (enemy.isBoss) ui.jackpot(enemy.name, reward, '你（中座）');
+    enemyMgr.removeEnemy(enemy);
+  }
+  return true;
 }
 
-// ---------- 命中處理 ----------
+// ---------- 命中處理（左右 AI 遠程砲彈）----------
 function onHit(enemy, bullet, hitPos) {
   spawnSpark(hitPos);
   const killed = enemy.hit(bullet.power);
@@ -127,12 +131,13 @@ function onHit(enemy, bullet, hitPos) {
 }
 
 // ---------- 特效 ----------
+// 火花共用單一幾何體與材質，避免每次命中都配置新資源
+const SPARK_GEO = new THREE.SphereGeometry(0.18, 6, 6);
+const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffe27a });
 const sparks = [];
 function spawnSpark(pos) {
-  const geo = new THREE.SphereGeometry(0.18, 6, 6);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffe27a });
   for (let i = 0; i < 5; i++) {
-    const m = new THREE.Mesh(geo, mat);
+    const m = new THREE.Mesh(SPARK_GEO, SPARK_MAT);
     m.position.copy(pos);
     const v = new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 5, (Math.random() - 0.5) * 6);
     scene.add(m);
@@ -165,7 +170,7 @@ function updateEffects(dt) {
     c.v.y -= 16 * dt;
     c.mesh.rotation.z += dt * 12;
     c.life -= dt;
-    if (c.life <= 0) { scene.remove(c.mesh); c.mesh.geometry.dispose(); coins.splice(i, 1); }
+    if (c.life <= 0) { scene.remove(c.mesh); coins.splice(i, 1); }
   }
 }
 
@@ -180,28 +185,19 @@ function worldToScreen(v) {
 // ---------- 遊戲迴圈 ----------
 const clock = new THREE.Clock();
 let running = false;
+let elapsed = 0;
 
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  updateSceneFx(dt, elapsed); // 烽火盆火光閃動
   if (!running) { renderer.render(scene, camera); return; }
 
-  // 自動瞄準最近敵人
-  if (ui.auto) {
-    const n = enemyMgr.nearest(turret.position);
-    if (n) target.copy(n.mesh.position).setY(1.4);
-  }
-  aimAt(target);
+  // 中座近戰武將：按住畫面或開啟自動時，前往砍殺敵人
+  hero.update(dt, { attack: firing, auto: ui.auto, point: target });
 
-  // 開火節奏
-  fireCooldown -= dt;
-  const wantFire = firing || ui.auto;
-  if (wantFire && fireCooldown <= 0) {
-    fireCooldown = FIRE_INTERVAL;
-    doFire();
-  }
-
-  // 左右 AI 玩家自動瞄準開火
+  // 左右 AI 玩家自動瞄準開火（遠程）
   for (const p of aiPlayers) p.update(dt);
 
   enemyMgr.update(dt, (boss) => {

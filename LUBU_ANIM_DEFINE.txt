@@ -1,0 +1,6 @@
+呂布 動作 frame
+idle 10~70
+attack1 234 264
+attack2 80 143
+attack4 534  550
+大絕招 153 224

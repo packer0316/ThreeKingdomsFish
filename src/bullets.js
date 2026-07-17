@@ -58,7 +58,7 @@ export class BulletManager {
   remove(i) {
     const b = this.bullets[i];
     this.scene.remove(b.mesh);
-    b.mesh.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+    // 箭矢幾何體為共用快取，不可 dispose
     this.bullets.splice(i, 1);
   }
 }

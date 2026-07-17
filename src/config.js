@@ -2,6 +2,10 @@
 
 export const START_COINS = 100000;
 
+// 每次命中「擊殺」的機率（魚機式捕獲率）。約 5%，敵將更難擊殺。
+export const KILL_CHANCE = 0.05;
+export const BOSS_KILL_FACTOR = 0.35; // 敵將擊殺機率 = KILL_CHANCE × 此值
+
 // 下注階梯
 export const BET_LEVELS = [10, 20, 50, 100, 200, 500, 1000];
 
@@ -12,11 +16,12 @@ export const GENERALS = [
   { name: '趙雲', color: 0xd8d8e0, robe: 0xb0b6c8, blade: 0xffffff },
 ];
 
-// 左右兩側的 AI 陪玩座位（會自動瞄準敵人開火，各自累積籌碼）
-// generalIndex 對應 GENERALS，x 為砲台的世界座標橫向位置
+// 左右兩側的 AI 弓箭手座位（會自動瞄準敵人拉弓放箭，各自累積籌碼）
+// generalIndex 對應 GENERALS，x 為弓箭手的世界座標橫向位置
+// drawTime = 拉滿弓所需秒數，recoverTime = 放箭後回復 / 搭新箭秒數
 export const AI_PLAYERS = [
-  { seat: 'left',  name: '常山趙子龍', generalIndex: 1, x: -14, coins: 5_284_900, betIndex: 4, fireInterval: 0.26 },
-  { seat: 'right', name: '江東小霸王', generalIndex: 2, x: 14,  coins: 9_130_500, betIndex: 5, fireInterval: 0.20 },
+  { seat: 'left',  name: '常山趙子龍', generalIndex: 1, x: -14, coins: 5_284_900, betIndex: 4, drawTime: 0.55, recoverTime: 0.4 },
+  { seat: 'right', name: '江東小霸王', generalIndex: 2, x: 14,  coins: 9_130_500, betIndex: 5, drawTime: 0.45, recoverTime: 0.3 },
 ];
 
 // 敵人類型（小兵）
