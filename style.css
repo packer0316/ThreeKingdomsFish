@@ -208,6 +208,54 @@ html, body {
 .room-page-btn:disabled { opacity: .4; cursor: default; }
 #room-page-label { font-size: 16px; font-weight: 800; color: #ffe9b0; min-width: 44px; text-align: center; }
 
+/* ---------- 右中：切換角色按鈕 ---------- */
+#char-switch {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.char-btn {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border-radius: 16px;
+  border: 3px solid rgba(140,180,255,.5);
+  background: linear-gradient(180deg, #21386b, #0e1c3a);
+  box-shadow: 0 3px 10px rgba(0,0,0,.55);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .1s, filter .15s, border-color .15s;
+}
+.char-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.char-btn span {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+  background: linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,0));
+  padding: 8px 0 3px;
+}
+.char-btn:hover { filter: brightness(1.15); }
+.char-btn:active { transform: scale(.96); }
+.char-btn.active {
+  border-color: #ffd24a;
+  box-shadow: 0 0 16px rgba(255,200,70,.8);
+}
+.char-btn.active span { color: #ffe27a; }
+
 /* ---------- HUD 底部三人列（各欄依武將 3D 位置定位）---------- */
 #hud {
   position: absolute;

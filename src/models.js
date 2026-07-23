@@ -120,6 +120,52 @@ export function makeSoldier(def) {
   return g;
 }
 
+// ---------- 官銜稱號牌（菁英小兵頭上顯示）----------
+// 以 canvas 繪字做成 Sprite，永遠面向鏡頭；同一官銜共用同一張貼圖。
+const _titleTextures = new Map();
+function titleTexture(text) {
+  let tex = _titleTextures.get(text);
+  if (tex) return tex;
+
+  const w = 560, h = 132;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+
+  // 深色底板 + 金框
+  ctx.beginPath();
+  ctx.roundRect(6, 6, w - 12, h - 12, 26);
+  ctx.fillStyle = 'rgba(24,10,4,0.74)';
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(255,205,122,0.85)';
+  ctx.stroke();
+
+  ctx.font = '700 62px "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd77a';
+  ctx.fillText(text, w / 2, h / 2 + 4);
+
+  tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  _titleTextures.set(text, tex);
+  return tex;
+}
+
+export function makeTitleLabel(text) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: titleTexture(text),
+    transparent: true,
+    depthWrite: false,
+  }));
+  sp.scale.set(3.3, 0.78, 1);
+  sp.position.y = 4.0;   // 小兵頂部約 3.2，稱號牌懸浮在頭頂上方
+  return sp;
+}
+
 // ---------- 武器 ----------
 function makeWeapon(type) {
   const g = new THREE.Group();

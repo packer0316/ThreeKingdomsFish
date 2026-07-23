@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeArcherGeneral } from './models.js';
-import { loadLubu } from './lubu.js';
+import { loadCharacter, CHARACTERS } from './characters.js';
 import { FIELD, BET_LEVELS, GENERALS } from './config.js';
 
 // 讓一根預設沿 Y 軸、單位長度的圓柱在 a、b 兩點之間拉伸對齊（用於弓弦）
@@ -276,6 +276,7 @@ export class MeleeGeneral {
     }
     this.halo.add(this.haloOuterArcs);
 
+    this.character = CHARACTERS.lubu;   // 目前操控的武將角色（可切換 FBX 模型）
     this.mixer = null;
     this.actions = {};
     this.currentAction = null;
@@ -331,13 +332,21 @@ export class MeleeGeneral {
   }
 
   async loadModel() {
-    const { object, clips } = await loadLubu();
+    const character = this.character;
+    const { object, clips } = await loadCharacter(character);
+    // 切換角色時可能中途又被切走：只採用最後一次請求的角色
+    if (this.character !== character) return;
     const model = object;
+
+    // 先歸零變換，讓正規化可重複套用（切換角色來回時不會累積縮放）
+    model.position.set(0, 0, 0);
+    model.scale.set(1, 1, 1);
+    model.rotation.set(0, 0, 0);
 
     // 正規化大小：等比縮放到目標高度
     let box = visibleBounds(model);
     const size = box.getSize(new THREE.Vector3());
-    const s = size.y > 0 ? LUBU_TARGET_HEIGHT / size.y : 1;
+    const s = size.y > 0 ? character.height / size.y : 1;
     model.scale.setScalar(s);
 
     // 對齊：腳踩地面（y=0），水平置中
@@ -346,7 +355,7 @@ export class MeleeGeneral {
     model.position.x -= center.x;
     model.position.z -= center.z;
     model.position.y -= box.min.y;
-    model.rotation.y = LUBU_MODEL_YAW;
+    model.rotation.y = character.yaw || 0;
 
     this.mesh.add(model);
     this.model = model;
@@ -354,13 +363,40 @@ export class MeleeGeneral {
 
     // 建立動作
     this.mixer = new THREE.AnimationMixer(model);
+    this.actions = {};
     for (const [name, clip] of Object.entries(clips)) {
       if (clip) this.actions[name] = this.mixer.clipAction(clip);
     }
-    this.attackCycle = this.attackCycle.filter((n) => this.actions[n]);
+    this.attackCycle = (character.attackCycle || ['attack1', 'attack2', 'attack4'])
+      .filter((n) => this.actions[n]);
+    this.currentAction = null;
+    this.lastAttack = null;
 
     this.ready = true;
     this.play('idle');
+  }
+
+  // 切換操控角色（呂布 / 關羽…）：卸下舊模型與動作，載入新模型
+  async setCharacter(def) {
+    if (!def || (this.character && this.character.id === def.id)) return;
+    this.character = def;
+    this.ready = false;
+    this.holdTimer = 0;
+    this.ultLock = 0;
+    this.hitCount = 0;
+
+    // 卸下舊模型
+    if (this.model) { this.mesh.remove(this.model); this.model = null; }
+    // 回收舊殘影
+    for (const g of this.ghosts) this.scene.remove(g.root);
+    this.ghosts = [];
+    // 停掉舊動作
+    if (this.mixer) this.mixer.stopAllAction();
+    this.mixer = null;
+    this.actions = {};
+    this.currentAction = null;
+
+    await this.loadModel();
   }
 
   // 播放動作；loop=false 為一次性動作（播完停在最後一格）

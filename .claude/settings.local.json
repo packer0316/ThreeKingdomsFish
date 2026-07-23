@@ -6,7 +6,8 @@
       "PowerShell(npm install)",
       "PowerShell(npm run build 2>&1)",
       "PowerShell($paths = @\\(\"C:\\\\Program Files \\(x86\\)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\", \"C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\", \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\", \"$env:LOCALAPPDATA\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\"\\); foreach \\($p in $paths\\) { if \\(Test-Path $p\\) { Write-Output \"FOUND: $p\" } }; node --version)",
-      "PowerShell($conns = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Write-Output \"killed vite on 5199\" } else { Write-Output \"no listener on 5199\" })"
+      "PowerShell($conns = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Write-Output \"killed vite on 5199\" } else { Write-Output \"no listener on 5199\" })",
+      "PowerShell($conns = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Write-Output \"killed leftover vite on 5199\" } else { Write-Output \"port 5199 clean\" })"
     ]
   }
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import fbxUrl from './res/Lubu.fbx?url';
-import texUrl from './res/Lubu.png?url';
+import fbxUrl from './res/charactor/lubu/Lubu.fbx?url';
+import texUrl from './res/charactor/lubu/Lubu.png?url';
 
 // 呂布 FBX 模型載入 + 動作切片 ---------------------------------------
 // 依 LUBU_ANIM_DEFINE.txt 的 frame 區間，把整段 take 切成命名子動畫。

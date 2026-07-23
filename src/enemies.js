@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
-import { makeSoldier, makeBoss } from './models.js';
+import { makeSoldier, makeBoss, makeTitleLabel } from './models.js';
 
 // 敵人物件與生成管理 --------------------------------------------
 
@@ -23,6 +23,7 @@ export class Enemy {
     this.name = def.name || def.label;
     this.dead = false;
     this.removed = false;   // 已離場（走出邊界或被擊殺移除）
+    this.title = null;      // 官銜（菁英小兵，由 EnemyManager 指派）
 
     this.mesh = isBoss ? makeBoss(def) : makeSoldier(def);
     this.mesh.userData.enemy = this;   // 供點擊射線反查敵人物件
@@ -189,10 +190,26 @@ export class EnemyManager {
     this.maxEnemies = 16;
     this.boss = null;                                    // 場上唯一的鎮守 Boss
     this.bossTimer = sceneDef ? sceneDef.boss.firstSpawn : 14;
+
+    // 官銜菁英小兵：可用官銜池（場上每個官銜至多一人）
+    this.eliteTitles = sceneDef?.eliteTitles ? [...sceneDef.eliteTitles] : [];
+    this.eliteChance = sceneDef?.eliteChance ?? 0.22;
+    this.eliteCooldowns = [];   // { title, t }：持有者陣亡後，官銜冷卻中
+  }
+
+  // 新生小兵有機率取得一個尚未使用的官銜（頭上掛稱號牌）
+  maybeAssignTitle(e) {
+    if (this.eliteTitles.length === 0) return;
+    if (Math.random() >= this.eliteChance) return;
+    const i = (Math.random() * this.eliteTitles.length) | 0;
+    const title = this.eliteTitles.splice(i, 1)[0];
+    e.title = title;
+    e.mesh.add(makeTitleLabel(title));
   }
 
   spawn(def, isBoss = false, opts = {}) {
     const e = new Enemy(def, isBoss, opts);
+    if (!isBoss) this.maybeAssignTitle(e);
     this.scene.add(e.mesh);
     this.enemies.push(e);
     return e;
@@ -211,6 +228,16 @@ export class EnemyManager {
   }
 
   update(dt, onBoss) {
+    // 官銜冷卻：期滿後放回可用池，之後的新小兵才可能再掛上
+    for (let i = this.eliteCooldowns.length - 1; i >= 0; i--) {
+      const c = this.eliteCooldowns[i];
+      c.t -= dt;
+      if (c.t <= 0) {
+        this.eliteTitles.push(c.title);
+        this.eliteCooldowns.splice(i, 1);
+      }
+    }
+
     // 一般小兵（成群生成）
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.enemies.length < this.maxEnemies) {
@@ -251,6 +278,13 @@ export class EnemyManager {
       this.boss = null;
       const b = this.sceneDef.boss;
       this.bossTimer = b.respawnMin + Math.random() * (b.respawnMax - b.respawnMin);
+    }
+
+    // 官銜持有者陣亡 / 離場 → 官銜進入冷卻，暫時不會再出現
+    if (e.title) {
+      const min = this.sceneDef?.eliteCooldownMin ?? 8;
+      const max = this.sceneDef?.eliteCooldownMax ?? 16;
+      this.eliteCooldowns.push({ title: e.title, t: min + Math.random() * (max - min) });
     }
   }
 

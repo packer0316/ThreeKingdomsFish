@@ -5,6 +5,7 @@ import { BulletManager } from './bullets.js';
 import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
 import { AIPlayer, MeleeGeneral } from './players.js';
+import { CHARACTERS } from './characters.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, CURRENT_SCENE, ROOMS } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
@@ -48,6 +49,17 @@ const BOSS_LABEL_HEIGHT = 7.4;   // Boss 頭頂名牌的世界高度
 // ---------- 中座玩家：近戰武將 ----------
 const hero = new MeleeGeneral(scene, GENERALS[0], enemyMgr, attemptSlash);
 ui.onGeneralChange = (def) => hero.setGeneral(def);
+
+// ---------- 右中：切換操控角色（呂布 / 關羽）----------
+const charBtns = document.querySelectorAll('#char-switch .char-btn');
+charBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const def = CHARACTERS[btn.dataset.char];
+    if (!def) return;
+    hero.setCharacter(def);
+    charBtns.forEach((b) => b.classList.toggle('active', b === btn));
+  });
+});
 
 // ---------- 左右兩側 AI 陪玩玩家（遠程砲台）----------
 const aiPlayers = AI_PLAYERS.map(
