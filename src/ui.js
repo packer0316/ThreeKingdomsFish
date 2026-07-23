@@ -12,7 +12,6 @@ export class UI {
 
     this.el = {
       auto: document.getElementById('auto-btn'),
-      weapon: document.getElementById('weapon-btn'),
       marquee: document.getElementById('marquee-text'),
       jackpot: document.getElementById('jackpot'),
       jackpotName: document.getElementById('jackpot-name'),
@@ -30,17 +29,12 @@ export class UI {
     this.startMarquee();
   }
 
-  // 常駐按鈕（自動 / 武將）綁定一次；bet 按鈕於 renderSlots 內綁定
+  // 常駐按鈕（自動）綁定一次；bet 按鈕於 renderSlots 內綁定
   bindActions() {
     this.el.auto.addEventListener('click', () => {
       this.auto = !this.auto;
       this.el.auto.classList.toggle('on', this.auto);
       this.el.auto.innerHTML = '自動<br>' + (this.auto ? 'ON' : 'OFF');
-    });
-    this.el.weapon.addEventListener('click', () => {
-      this.generalIndex = (this.generalIndex + 1) % GENERALS.length;
-      this.el.weapon.innerHTML = '武將<br>' + GENERALS[this.generalIndex].name;
-      if (this.onGeneralChange) this.onGeneralChange(GENERALS[this.generalIndex]);
     });
   }
 

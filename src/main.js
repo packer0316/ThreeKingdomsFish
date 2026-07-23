@@ -44,7 +44,7 @@ const bulletMgr = new BulletManager(scene);
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
 const bossPlate = new BossPlate(ui.el.root, CURRENT_SCENE.boss);
 document.getElementById('scene-badge').textContent = '⚔ ' + CURRENT_SCENE.name;
-const BOSS_LABEL_HEIGHT = 7.4;   // Boss 頭頂名牌的世界高度
+const BOSS_LABEL_HEIGHT = 8.1;   // Boss 頭頂名牌的世界高度（紅纓頂之上）
 
 // ---------- 中座玩家：近戰武將 ----------
 const hero = new MeleeGeneral(scene, GENERALS[0], enemyMgr, attemptSlash);
@@ -273,7 +273,7 @@ function positionSlots() {
     _seatPoint.set(SEAT_X[seat], 0, FIELD.turretZ);
     const s = worldToScreen(_seatPoint);
     const half = el.offsetWidth / 2 || 125;
-    const RIGHT_RESERVE = 150;   // 右側保留給 自動 / 武將 按鈕，避免重疊
+    const RIGHT_RESERVE = 16;    // 右下角已無按鈕，僅留小邊距
     const minX = half + 8;
     const maxX = window.innerWidth - half - 8 - RIGHT_RESERVE;
     const x = Math.max(minX, Math.min(maxX, s.x));

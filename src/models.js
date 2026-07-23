@@ -213,31 +213,217 @@ function makeWeapon(type) {
 }
 
 // ---------- 敵將 Boss ----------
+// 精緻版守關大將：鐵甲＋陣營色胸甲、雙層肩甲、裙甲、兜鍪紅纓、
+// 怒眉絡腮鬍、長柄大刀與披風金釦。可動部位與小兵相同
+// （userData.parts = { legL, legR, armR }），沿用既有走路/揮臂動畫。
 export function makeBoss(def) {
-  const g = makeSoldier({ faction: def.faction, weapon: 'sword', scale: 1 });
+  const g = new THREE.Group();
+  const ARMOR = def.faction;     // 陣營主色（胸甲/臂甲/裙甲）
+  const IRON = 0x34343e;         // 鐵甲底色
+  const GOLD = 0xd8a83a;         // 金飾
+  const RED = 0xc02030;          // 紅纓 / 流蘇
 
-  // 披風
-  const cape = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.4, 1.8),
-    mat(0x7a1030, { side: THREE.DoubleSide })
-  );
-  cape.position.set(0, 1.5, -0.4);
-  cape.rotation.x = 0.15;
-  g.add(cape);
+  // ---- 腿（髖部樞紐，含護膝與戰靴，走路整條擺動）----
+  const makeLeg = (side) => {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.28, 1.2, 0);
+    const thigh = box(0.38, 0.6, 0.44, 0x2a2a32);
+    thigh.position.y = -0.3;
+    leg.add(thigh);
+    const knee = box(0.36, 0.16, 0.4, GOLD, metalMat(GOLD));
+    knee.position.y = -0.62;
+    leg.add(knee);
+    const shin = box(0.32, 0.55, 0.36, 0x22222a);
+    shin.position.y = -0.85;
+    leg.add(shin);
+    const boot = box(0.42, 0.3, 0.62, 0x1c1c22);
+    boot.position.set(0, -1.06, 0.06);
+    leg.add(boot);
+    g.add(leg);
+    return leg;
+  };
+  const legL = makeLeg(-1);
+  const legR = makeLeg(1);
 
-  // 華麗頭冠
-  const crown = cyl(0.44, 0.5, 0.5, 0xffcf3a, 12, metalMat(0xffcf3a));
-  crown.position.y = 2.8;
-  g.add(crown);
-
-  // 頭頂雙翎
+  // ---- 裙甲（前後擺片＋側片）----
+  const skirtF = box(0.95, 0.6, 0.12, ARMOR, metalMat(ARMOR));
+  skirtF.position.set(0, 1.08, 0.34);
+  skirtF.rotation.x = 0.2;
+  g.add(skirtF);
+  const skirtHem = box(0.72, 0.07, 0.13, GOLD, metalMat(GOLD));
+  skirtHem.position.set(0, 0.84, 0.42);
+  skirtHem.rotation.x = 0.2;
+  g.add(skirtHem);
+  const skirtB = box(0.95, 0.6, 0.12, ARMOR, metalMat(ARMOR));
+  skirtB.position.set(0, 1.08, -0.34);
+  skirtB.rotation.x = -0.2;
+  g.add(skirtB);
   for (const side of [-1, 1]) {
-    const plume = box(0.06, 0.9, 0.06, 0xd0202a);
-    plume.position.set(side * 0.2, 3.5, 0);
-    plume.rotation.z = side * 0.3;
-    g.add(plume);
+    const skirtS = box(0.12, 0.58, 0.72, ARMOR, metalMat(ARMOR));
+    skirtS.position.set(side * 0.55, 1.08, 0);
+    skirtS.rotation.z = side * -0.16;
+    g.add(skirtS);
   }
 
+  // ---- 軀幹：鐵甲底＋陣營色胸甲＋金釘金邊 ----
+  const torso = box(1.2, 1.2, 0.75, IRON, metalMat(IRON));
+  torso.position.y = 2.0;
+  g.add(torso);
+  const chest = box(1.05, 0.85, 0.14, ARMOR, metalMat(ARMOR));
+  chest.position.set(0, 2.12, 0.42);
+  g.add(chest);
+  for (const sx of [-1, 1]) {
+    for (const sy of [0, 1]) {
+      const stud = sph(0.055, GOLD, metalMat(GOLD));
+      stud.position.set(sx * 0.36, 1.9 + sy * 0.46, 0.5);
+      g.add(stud);
+    }
+  }
+  const trim = box(1.24, 0.09, 0.78, GOLD, metalMat(GOLD));
+  trim.position.y = 1.66;
+  g.add(trim);
+  const belt = box(1.26, 0.24, 0.8, 0x3a2412);
+  belt.position.y = 1.46;
+  g.add(belt);
+  const buckle = box(0.3, 0.2, 0.08, GOLD, metalMat(GOLD));
+  buckle.position.set(0, 1.46, 0.42);
+  g.add(buckle);
+
+  // ---- 雙層肩甲＋金緣 ----
+  for (const side of [-1, 1]) {
+    const p1 = box(0.66, 0.2, 0.9, ARMOR, metalMat(ARMOR));
+    p1.position.set(side * 0.85, 2.5, 0);
+    p1.rotation.z = side * -0.32;
+    g.add(p1);
+    const p2 = box(0.5, 0.18, 0.74, IRON, metalMat(IRON));
+    p2.position.set(side * 0.72, 2.68, 0);
+    p2.rotation.z = side * -0.2;
+    g.add(p2);
+    const rim = box(0.1, 0.1, 0.92, GOLD, metalMat(GOLD));
+    rim.position.set(side * 1.08, 2.36, 0);
+    rim.rotation.z = side * -0.32;
+    g.add(rim);
+  }
+
+  // ---- 左臂（垂持，含鐵護腕）----
+  const armL = box(0.32, 1.0, 0.32, ARMOR);
+  armL.position.set(-0.88, 1.98, 0.05);
+  g.add(armL);
+  const bracerL = box(0.38, 0.3, 0.38, IRON, metalMat(IRON));
+  bracerL.position.set(-0.88, 1.5, 0.05);
+  g.add(bracerL);
+  const handL = sph(0.16, SKIN);
+  handL.position.set(-0.88, 1.28, 0.05);
+  g.add(handL);
+
+  // ---- 右臂（揮擊樞紐）＋ 長柄大刀 ----
+  const armR = new THREE.Group();
+  armR.position.set(0.88, 2.42, 0.12);
+  armR.rotation.x = -0.5;
+  const armRm = box(0.32, 0.95, 0.32, ARMOR);
+  armRm.position.y = -0.4;
+  armR.add(armRm);
+  const bracerR = box(0.38, 0.28, 0.38, IRON, metalMat(IRON));
+  bracerR.position.y = -0.82;
+  armR.add(bracerR);
+  const handR = sph(0.17, SKIN);
+  handR.position.y = -1.05;
+  armR.add(handR);
+
+  const saber = new THREE.Group();
+  saber.position.y = -1.05;
+  const shaft = cyl(0.06, 0.06, 3.0, 0x2c1a0e, 8);
+  shaft.position.y = 0.4;
+  saber.add(shaft);
+  const buttCap = cyl(0.09, 0.04, 0.22, GOLD, 8, metalMat(GOLD));
+  buttCap.position.y = -1.2;
+  saber.add(buttCap);
+  const ferrule = cyl(0.09, 0.07, 0.3, GOLD, 8, metalMat(GOLD));
+  ferrule.position.y = 1.95;
+  saber.add(ferrule);
+  const tassel = cyl(0.04, 0.13, 0.32, RED, 8);
+  tassel.position.set(0, 1.78, 0);
+  saber.add(tassel);
+  const blade = box(0.24, 1.35, 0.08, 0xd8dae2, metalMat(0xd8dae2));
+  blade.position.set(0.12, 2.62, 0);
+  blade.rotation.z = 0.14;
+  saber.add(blade);
+  const bladeBack = box(0.1, 1.2, 0.07, GOLD, metalMat(GOLD));
+  bladeBack.position.set(0.32, 2.56, 0);
+  bladeBack.rotation.z = 0.3;
+  saber.add(bladeBack);
+  const bladeTip = box(0.2, 0.42, 0.075, 0xd8dae2, metalMat(0xd8dae2));
+  bladeTip.position.set(0.32, 3.32, 0);
+  bladeTip.rotation.z = 0.42;
+  saber.add(bladeTip);
+  armR.add(saber);
+  g.add(armR);
+
+  // ---- 頭：怒眉＋絡腮鬍 ----
+  const neck = cyl(0.18, 0.22, 0.22, SKIN, 8);
+  neck.position.y = 2.66;
+  g.add(neck);
+  const head = sph(0.42, SKIN);
+  head.position.y = 3.0;
+  g.add(head);
+  const beard = box(0.56, 0.38, 0.2, 0x201612);
+  beard.position.set(0, 2.78, 0.28);
+  g.add(beard);
+  for (const side of [-1, 1]) {
+    const brow = box(0.2, 0.055, 0.06, 0x201612);
+    brow.position.set(side * 0.16, 3.14, 0.37);
+    brow.rotation.z = side * 0.3;   // 內端壓低 → 怒相
+    g.add(brow);
+  }
+
+  // ---- 兜鍪：鐵盔＋金盔沿＋護頰＋紅纓 ----
+  const dome = sph(0.46, IRON, metalMat(IRON));
+  dome.scale.y = 0.8;
+  dome.position.y = 3.3;
+  g.add(dome);
+  const brim = cyl(0.55, 0.58, 0.12, GOLD, 12, metalMat(GOLD));
+  brim.position.y = 3.12;
+  g.add(brim);
+  for (const side of [-1, 1]) {
+    const cheek = box(0.12, 0.34, 0.34, IRON, metalMat(IRON));
+    cheek.position.set(side * 0.44, 2.92, 0.02);
+    g.add(cheek);
+  }
+  const crest = cyl(0.1, 0.14, 0.2, GOLD, 8, metalMat(GOLD));
+  crest.position.y = 3.72;
+  g.add(crest);
+  const ying = cyl(0.03, 0.2, 0.42, RED, 8);   // 倒錐紅纓，覆蓋盔頂
+  ying.position.y = 3.94;
+  g.add(ying);
+  const yingBall = sph(0.06, GOLD, metalMat(GOLD));
+  yingBall.position.y = 4.14;
+  g.add(yingBall);
+
+  // ---- 披風（上窄下寬的梯形，暗紅＋金色下襬）＋肩釦 ----
+  const capeShape = new THREE.Shape();
+  capeShape.moveTo(-0.62, 0.8);
+  capeShape.lineTo(0.62, 0.8);
+  capeShape.lineTo(1.0, -1.05);
+  capeShape.lineTo(-1.0, -1.05);
+  capeShape.closePath();
+  const cape = new THREE.Mesh(
+    new THREE.ShapeGeometry(capeShape),
+    mat(0x4a0c14, { side: THREE.DoubleSide })
+  );
+  cape.position.set(0, 2.0, -0.56);
+  cape.rotation.x = 0.16;
+  g.add(cape);
+  const capeHem = box(1.9, 0.1, 0.05, GOLD, metalMat(GOLD));
+  capeHem.position.set(0, 0.97, -0.73);
+  capeHem.rotation.x = 0.16;
+  g.add(capeHem);
+  for (const side of [-1, 1]) {
+    const clasp = sph(0.09, GOLD, metalMat(GOLD));
+    clasp.position.set(side * 0.5, 2.72, -0.34);
+    g.add(clasp);
+  }
+
+  g.userData.parts = { legL, legR, armR };
   g.scale.setScalar(def.scale || 1.8);
   return g;
 }
