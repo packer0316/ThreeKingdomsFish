@@ -18,8 +18,34 @@
 
     <!-- 左上房間資訊 -->
     <div id="top-left">
-      <div class="room-badge">📜 群雄・81房</div>
+      <div class="scene-badge" id="scene-badge">⚔ 虎牢關</div>
+      <div class="room-badge" id="room-badge">📜 <span id="room-badge-name">休閒41房</span> <span class="room-badge-caret">▾ 換房</span></div>
       <div class="rank-badge">🏆 即時排行</div>
+    </div>
+
+    <!-- 場景開幕橫幅（入場時顯示關卡名與故事引言） -->
+    <div id="scene-banner" class="hidden">
+      <div class="scene-banner-inner">
+        <div class="scene-banner-sub">— 第一關 —</div>
+        <div class="scene-banner-name" id="scene-banner-name">虎牢關</div>
+        <div class="scene-banner-story" id="scene-banner-story"></div>
+      </div>
+    </div>
+
+    <!-- 選房頁面 -->
+    <div id="room-modal" class="hidden">
+      <div class="room-panel">
+        <div class="room-panel-head">
+          <span class="room-panel-title">選房頁面</span>
+          <button class="room-close" id="room-close">✕</button>
+        </div>
+        <div id="room-list"></div>
+        <div class="room-pager">
+          <button class="room-page-btn" id="room-prev">◀</button>
+          <span id="room-page-label">1/2</span>
+          <button class="room-page-btn" id="room-next">▶</button>
+        </div>
+      </div>
     </div>
 
     <!-- 大獎彈窗 -->
@@ -32,23 +58,12 @@
       </div>
     </div>
 
-    <!-- 底部控制列 -->
+    <!-- 底部三人列（左玩家｜你｜右玩家）內容由 UI.renderSlots 動態填入 -->
     <div id="hud">
-      <div class="hud-left">
-        <div class="coin-box">
-          <span class="coin-icon">🪙</span>
-          <span id="coin-value">100,000</span>
-        </div>
-      </div>
-      <div class="hud-center">
-        <button id="bet-down" class="round-btn">−</button>
-        <div class="bet-box">
-          <div class="bet-label">下注</div>
-          <div id="bet-value">50</div>
-        </div>
-        <button id="bet-up" class="round-btn">＋</button>
-      </div>
-      <div class="hud-right">
+      <div class="player-slot" data-seat="left"></div>
+      <div class="player-slot player-slot-mid" data-seat="mid"></div>
+      <div class="player-slot" data-seat="right"></div>
+      <div class="hud-actions">
         <button id="auto-btn" class="side-btn">自動<br>OFF</button>
         <button id="weapon-btn" class="side-btn">武將<br>關羽</button>
       </div>
@@ -58,13 +73,14 @@
     <div id="intro">
       <div class="intro-card">
         <h1>三國魚機・武將爭霸</h1>
-        <p>指揮中座武將衝入戰場揮刀砍殺三國小兵與敵將，奪取籌碼！</p>
+        <p class="intro-story">十八路諸侯會盟討董，兵臨虎牢關——守關大將華雄連斬聯軍數員上將，正在關前耀武搦戰。指揮你的武將出陣，斬華雄、奪籌碼！</p>
         <ul>
-          <li>🖱️ 點擊 / 按住畫面 = 武將前往該處最近的敵人砍殺（每刀消耗一次下注）</li>
+          <li>🖱️ 點擊敵人 = 武將衝刺鎖定砍殺，目標倒下後返回原位（每刀消耗一次下注）</li>
+          <li>🤖 開啟「自動」= 優先打你點選的目標，沒點選就自動追擊最近的敵人</li>
           <li>🗡️ 中座是近戰武將，左右兩側是遠程砲台隊友</li>
           <li>➕➖ 調整下注倍率，倍率越高刀傷與獎勵越大</li>
           <li>🛡️ 刀兵 / 槍兵 / 弓兵 / 盾兵 血量與獎勵不同</li>
-          <li>👑 敵將（呂布 / 關羽 / 張飛）為大獎目標</li>
+          <li>👑 守關大將「華雄」在關前徘徊搦戰，斬其首級可得大獎！</li>
         </ul>
         <button id="start-btn">進入戰場</button>
       </div>

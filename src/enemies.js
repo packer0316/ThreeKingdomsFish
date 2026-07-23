@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ENEMY_TYPES, BOSSES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
+import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
 import { makeSoldier, makeBoss } from './models.js';
 
 // 敵人物件與生成管理 --------------------------------------------
@@ -22,8 +22,10 @@ export class Enemy {
     this.value = def.value;
     this.name = def.name || def.label;
     this.dead = false;
+    this.removed = false;   // 已離場（走出邊界或被擊殺移除）
 
     this.mesh = isBoss ? makeBoss(def) : makeSoldier(def);
+    this.mesh.userData.enemy = this;   // 供點擊射線反查敵人物件
     // 小兵數量多，關閉投影以省下每幀陰影 pass 的大量幾何體
     if (!isBoss) this.mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
 
@@ -114,14 +116,79 @@ export class Enemy {
   }
 }
 
+// 鎮守 Boss：從邊界進場後改為在戰場內徘徊搦戰，永不離場，
+// 只會被斬殺；移動採「走向隨機定點 → 停步耀武 → 再走」的巡場節奏。
+export class BossEnemy extends Enemy {
+  constructor(def) {
+    super(def, true, {});
+    this.waypoint = new THREE.Vector3();
+    this.pauseT = 0;                       // 停步耀武倒數
+    this.targetYaw = this.mesh.rotation.y;
+    this.pickWaypoint();
+  }
+
+  // 徘徊定點：避開貼邊，集中在關前中央區域
+  pickWaypoint() {
+    this.waypoint.set(
+      (Math.random() * 2 - 1) * (FIELD.maxX - 7),
+      0,
+      FIELD.minZ + 3 + Math.random() * (FIELD.maxZ - FIELD.minZ - 5)
+    );
+  }
+
+  update(dt) {
+    const p = this.mesh.position;
+
+    if (this.pauseT > 0) {
+      // 停步耀武：重心緩慢搖晃
+      this.pauseT -= dt;
+      this.walkPhase += dt * 2;
+    } else {
+      const dx = this.waypoint.x - p.x;
+      const dz = this.waypoint.z - p.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.6) {
+        this.pauseT = 1.2 + Math.random() * 1.8;
+        this.pickWaypoint();
+      } else {
+        const spd = this.speed * 1.8;
+        p.x += (dx / dist) * spd * dt;
+        p.z += (dz / dist) * spd * dt;
+        this.targetYaw = Math.atan2(dx, dz);
+        this.walkPhase += dt * (0.6 + spd) * 3;
+      }
+    }
+
+    // 平滑轉向面對行進方向
+    let dYaw = this.targetYaw - this.mesh.rotation.y;
+    dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
+    this.mesh.rotation.y += dYaw * Math.min(1, dt * 6);
+
+    // 走路擺動（停步時幅度縮小）
+    const parts = this.mesh.userData.parts;
+    if (parts) {
+      const s = Math.sin(this.walkPhase) * (this.pauseT > 0 ? 0.12 : 0.5);
+      parts.legL.rotation.x = s;
+      parts.legR.rotation.x = -s;
+      parts.armR.rotation.x = -0.5 - s * 0.4;
+    }
+    p.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
+
+    return true;   // 鎮守關前，永不離場
+  }
+}
+
 export class EnemyManager {
-  constructor(scene) {
+  // sceneDef: 場景設定（見 config.js SCENES），決定鎮守 Boss 與其登場節奏
+  constructor(scene, sceneDef) {
     this.scene = scene;
+    this.sceneDef = sceneDef;
     this.enemies = [];
     this.spawnTimer = 1;
     this.spawnInterval = 2.6;
     this.maxEnemies = 16;
-    this.bossTimer = 14;
+    this.boss = null;                                    // 場上唯一的鎮守 Boss
+    this.bossTimer = sceneDef ? sceneDef.boss.firstSpawn : 14;
   }
 
   spawn(def, isBoss = false, opts = {}) {
@@ -151,13 +218,16 @@ export class EnemyManager {
       this.spawnGroup();
     }
 
-    // 敵將
-    this.bossTimer -= dt;
-    if (this.bossTimer <= 0) {
-      this.bossTimer = 18 + Math.random() * 10;
-      const boss = BOSSES[(Math.random() * BOSSES.length) | 0];
-      const e = this.spawn(boss, true);
-      if (onBoss) onBoss(e);
+    // 鎮守 Boss：同時間只會有一位；被斬殺後倒數重新出關
+    if (this.sceneDef && !this.boss) {
+      this.bossTimer -= dt;
+      if (this.bossTimer <= 0) {
+        const e = new BossEnemy(this.sceneDef.boss);
+        this.scene.add(e.mesh);
+        this.enemies.push(e);
+        this.boss = e;
+        if (onBoss) onBoss(e);
+      }
     }
 
     // 更新並回收
@@ -171,9 +241,17 @@ export class EnemyManager {
 
   remove(index) {
     const e = this.enemies[index];
+    e.removed = true;
     this.scene.remove(e.mesh);
     // 幾何體為共用快取，不可 dispose；僅從場景移除即可回收
     this.enemies.splice(index, 1);
+
+    // 鎮守 Boss 被斬殺 → 排定下次出關時間
+    if (e === this.boss) {
+      this.boss = null;
+      const b = this.sceneDef.boss;
+      this.bossTimer = b.respawnMin + Math.random() * (b.respawnMax - b.respawnMin);
+    }
   }
 
   removeEnemy(enemy) {

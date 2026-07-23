@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeArcherGeneral } from './models.js';
 import { loadLubu } from './lubu.js';
 import { FIELD, BET_LEVELS, GENERALS } from './config.js';
@@ -40,11 +41,12 @@ export class AIPlayer {
     this.drawVal = 0;                          // 0=鬆弦 1=滿弓
     this.maxDraw = 0.55;                       // nock 最大後移量
 
+    this.seat = def.seat;        // 目前所在座位 slot：'left' | 'mid' | 'right'
+    this.onMoney = null;         // 金錢變動回呼（由主程式接到底部 HUD）
+
     this.turret = this.buildArcher();
     scene.add(this.turret);
     this.applyDraw(0);
-
-    this.buildSeat(root);
   }
 
   get bet() { return BET_LEVELS[this.betIndex]; }
@@ -62,35 +64,28 @@ export class AIPlayer {
     return t;
   }
 
-  // ---------- 建立畫面座位面板 ----------
-  buildSeat(root) {
-    const el = document.createElement('div');
-    el.className = 'seat seat-' + this.def.seat;
-    el.innerHTML =
-      `<div class="seat-name">${this.def.name}</div>` +
-      `<div class="seat-info">` +
-        `<span class="seat-general">弓將・${this.general.name}</span>` +
-        `<span class="seat-bet">押 ${fmt(this.bet)}</span>` +
-      `</div>` +
-      `<div class="seat-coin"><span class="coin-icon">🪙</span>` +
-        `<span class="seat-coin-value">0</span></div>`;
-    root.appendChild(el);
-    this.seatEl = el;
-    this.coinEl = el.querySelector('.seat-coin-value');
-    this.refreshSeat();
+  // 換座位：把弓箭手移到指定座位的橫向座標
+  moveToSeat(x) {
+    this.turret.position.x = x;
+    this.def.x = x;
   }
 
-  refreshSeat() {
-    this.coinEl.textContent = fmt(this.coins);
+  // 換房 / 換座位時更新此 AI 的資料（畫面顯示由底部 HUD 統一渲染）
+  applySeatData(data) {
+    if (data.name != null) this.def.name = data.name;
+    if (data.generalIndex != null) this.general = GENERALS[data.generalIndex] || this.general;
+    if (data.betIndex != null) this.betIndex = data.betIndex;
+    if (data.coins != null) this.coins = data.coins;
   }
 
-  // 擊殺獲得籌碼：更新數字並閃爍座位
+  // 金錢真實計算：放箭消耗下注、擊殺獲得獎勵，變動即通知 HUD
+  pay(amount) {
+    this.coins = Math.max(0, this.coins - amount);
+    if (this.onMoney) this.onMoney(false);
+  }
   win(amount) {
     this.coins += amount;
-    this.refreshSeat();
-    this.seatEl.classList.remove('flash');
-    void this.seatEl.offsetWidth; // 觸發重繪以重啟動畫
-    this.seatEl.classList.add('flash');
+    if (this.onMoney) this.onMoney(true);
   }
 
   // ---------- 每幀更新：選目標、轉身瞄準、拉弓放箭 ----------
@@ -165,6 +160,7 @@ export class AIPlayer {
   }
 
   releaseArrow() {
+    this.pay(this.bet);          // 放箭消耗一次下注（金錢真實計算）
     const muzzleWorld = new THREE.Vector3();
     this.turret.userData.muzzle.getWorldPosition(muzzleWorld);
     const dir = new THREE.Vector3().subVectors(this.target, muzzleWorld).normalize();
@@ -185,6 +181,23 @@ function fmt(n) {
 const LUBU_TARGET_HEIGHT = 4.5;   // 模型正規化後的世界高度
 const LUBU_MODEL_YAW = 0;         // 模型正面若非 +Z，可在此加上旋轉修正
 const ULT_EVERY = 8;              // 每累積 N 次揮刀施放一次大絕招
+
+// 衝刺特效參數
+const GHOST_COUNT = 6;            // 殘影池大小
+const GHOST_LIFE = 0.32;          // 殘影淡出秒數
+const GHOST_INTERVAL = 0.07;      // 衝刺時的殘影生成間隔
+const DUST_LIFE = 0.38;           // 塵光粒子壽命
+const DASH_TRIGGER_DIST = 6;      // 距離目標超過此值才觸發衝刺（貼身跟隨不衝刺）
+
+// 衝刺粒子共用資源（避免每顆粒子各自配置幾何體/材質）
+const DUST_GEO = new THREE.SphereGeometry(0.16, 6, 6);
+const DUST_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffd98a,
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
 
 // Box3.setFromObject 仍會納入 visible=false 的節點，需自行排除已關閉的赤兔馬。
 function visibleBounds(root) {
@@ -270,14 +283,49 @@ export class MeleeGeneral {
     this.lastAttack = null;
     this.ready = false;
 
-    this.speed = 13;             // 移動速度（世界單位/秒）
+    this.speed = 13;             // 一般移動速度（貼身跟隨、收兵回原位）
+    this.sprintSpeed = 26;       // 遠距離撲向敵人時的衝刺速度
+    this.dashing = false;        // 衝刺中（僅遠距離接敵時觸發，貼身跟隨不衝刺）
     this.meleeRange = 2.4;       // 揮刀有效距離
     this.attackInterval = 0.34;  // 揮刀間隔
     this.attackCooldown = 0;
     this.holdTimer = 0;          // 一次性動作保留時間（>0 時不切回 idle）
     this.ultLock = 0;            // 大絕招鎖定（>0 時不被普通揮刀動作打斷）
     this.hitCount = 0;
-    this.target = null;
+    this.target = null;          // 目前攻擊中的敵人
+    this.selected = null;        // 玩家點選鎖定的敵人（永遠優先攻擊）
+
+    // 衝刺特效狀態：殘影池 + 塵光粒子
+    this.model = null;
+    this.ghosts = [];
+    this.ghostSrcNodes = [];
+    this.ghostTimer = 0;
+    this.dust = [];
+    this.dustTimer = 0;
+
+    // 鎖定目標的地面紅圈（細底環 + 兩段旋轉亮弧）
+    this.targetRingMat = new THREE.MeshBasicMaterial({
+      color: 0xff4d3a,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.targetRing = new THREE.Group();
+    const ringBaseGeo = new THREE.RingGeometry(1.0, 1.1, 48);
+    ringBaseGeo.rotateX(-Math.PI / 2);
+    this.targetRing.add(new THREE.Mesh(ringBaseGeo, this.targetRingMat));
+    const ringArcGeo = new THREE.RingGeometry(1.18, 1.38, 32, 1, 0, Math.PI * 0.55);
+    ringArcGeo.rotateX(-Math.PI / 2);
+    for (let i = 0; i < 2; i++) {
+      const arc = new THREE.Mesh(ringArcGeo, this.targetRingMat);
+      arc.rotation.y = Math.PI * i;
+      this.targetRing.add(arc);
+    }
+    this.targetRing.position.y = 0.06;
+    this.targetRing.visible = false;
+    scene.add(this.targetRing);
 
     this.loadModel();
   }
@@ -301,6 +349,8 @@ export class MeleeGeneral {
     model.rotation.y = LUBU_MODEL_YAW;
 
     this.mesh.add(model);
+    this.model = model;
+    this.buildGhosts(model);
 
     // 建立動作
     this.mixer = new THREE.AnimationMixer(model);
@@ -335,6 +385,148 @@ export class MeleeGeneral {
     this.def = def;
   }
 
+  // 換座位：把待命原位（與模型）移到指定座位的橫向座標
+  moveToSeat(x) {
+    this.home.x = x;
+    // 非攻擊狀態時直接歸位，避免長距離走動穿越戰場
+    if (!this.target) this.mesh.position.x = x;
+  }
+
+  // 玩家點選敵人：立即鎖定並前往攻擊（不需長按）
+  select(enemy) {
+    if (!enemy || enemy.dead || enemy.removed) return;
+    this.selected = enemy;
+    this.target = enemy;
+  }
+
+  // 點擊空地：取消鎖定（非自動模式下武將會走回原位）
+  clearSelection() {
+    this.selected = null;
+  }
+
+  // 建立殘影池：複製一次骨架模型，之後衝刺時重複使用（凍結姿勢淡出）
+  buildGhosts(model) {
+    this.ghostSrcNodes = [];
+    model.traverse((o) => this.ghostSrcNodes.push(o));
+
+    for (let i = 0; i < GHOST_COUNT; i++) {
+      const root = cloneSkinned(model);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffb84d,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const nodes = [];
+      root.traverse((o) => {
+        nodes.push(o);
+        if (o.isMesh) {
+          o.material = mat;
+          o.castShadow = false;
+          o.receiveShadow = false;
+        }
+      });
+      root.visible = false;
+      this.scene.add(root);
+      this.ghosts.push({ root, nodes, mat, life: 0 });
+    }
+  }
+
+  // 取出池中最舊的殘影，套用當前姿勢後放在原地淡出
+  spawnGhost() {
+    let g = this.ghosts[0];
+    for (const c of this.ghosts) if (c.life < g.life) g = c;
+
+    // 殘影掛在場景根層，直接取模型的世界矩陣定位
+    this.model.matrixWorld.decompose(g.root.position, g.root.quaternion, g.root.scale);
+    for (let i = 1; i < g.nodes.length; i++) {
+      const src = this.ghostSrcNodes[i];
+      const dst = g.nodes[i];
+      dst.position.copy(src.position);
+      dst.quaternion.copy(src.quaternion);
+      dst.scale.copy(src.scale);
+    }
+    g.life = GHOST_LIFE;
+    g.mat.opacity = 0.4;
+    g.root.visible = true;
+  }
+
+  // 足下塵光：拖在衝刺方向的後方
+  spawnDust() {
+    const back = new THREE.Vector3(-Math.sin(this.facing), 0, -Math.cos(this.facing));
+    for (let i = 0; i < 2; i++) {
+      const m = new THREE.Mesh(DUST_GEO, DUST_MAT);
+      m.position.copy(this.mesh.position);
+      m.position.x += (Math.random() - 0.5) * 0.8;
+      m.position.z += (Math.random() - 0.5) * 0.8;
+      m.position.y = 0.25 + Math.random() * 0.9;
+      const v = back.clone().multiplyScalar(2 + Math.random() * 3);
+      v.x += (Math.random() - 0.5) * 1.5;
+      v.z += (Math.random() - 0.5) * 1.5;
+      v.y = 0.4 + Math.random() * 0.8;
+      this.scene.add(m);
+      this.dust.push({ mesh: m, v, life: DUST_LIFE });
+    }
+  }
+
+  // 衝刺特效：衝刺中持續產生殘影與塵光，並更新既有粒子的淡出
+  updateSprintFx(dt, sprinting) {
+    if (sprinting) {
+      this.ghostTimer -= dt;
+      if (this.ghostTimer <= 0 && this.ghosts.length > 0) {
+        this.ghostTimer = GHOST_INTERVAL;
+        this.spawnGhost();
+      }
+      this.dustTimer -= dt;
+      if (this.dustTimer <= 0) {
+        this.dustTimer = 0.05;
+        this.spawnDust();
+      }
+    } else {
+      this.ghostTimer = 0;
+      this.dustTimer = 0;
+    }
+
+    for (const g of this.ghosts) {
+      if (g.life <= 0) continue;
+      g.life -= dt;
+      if (g.life <= 0) {
+        g.root.visible = false;
+        g.mat.opacity = 0;
+      } else {
+        g.mat.opacity = (g.life / GHOST_LIFE) * 0.4;
+      }
+    }
+
+    for (let i = this.dust.length - 1; i >= 0; i--) {
+      const p = this.dust[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.scene.remove(p.mesh);
+        this.dust.splice(i, 1);
+        continue;
+      }
+      p.mesh.position.addScaledVector(p.v, dt);
+      p.v.y += 2.5 * dt;   // 塵光輕微上飄
+      p.mesh.scale.setScalar(0.5 + (p.life / DUST_LIFE) * 0.9);
+    }
+  }
+
+  // 鎖定紅圈跟著目前目標腳下轉動
+  updateTargetRing(dt) {
+    const t = this.target;
+    if (!t || t.dead || t.removed) {
+      this.targetRing.visible = false;
+      return;
+    }
+    this.targetRing.visible = true;
+    this.targetRing.position.set(t.mesh.position.x, 0.06, t.mesh.position.z);
+    this.targetRing.rotation.y += dt * 2.6;
+    this.targetRing.scale.setScalar(Math.max(1, t.radius));
+    this.targetRingMat.opacity = 0.5 + (Math.sin(this.haloTime * 6) + 1) * 0.2;
+  }
+
   // 觸發一次揮刀動作（普通攻擊隨機挑選，或每 ULT_EVERY 次施放大絕招）
   triggerSlash() {
     this.hitCount++;
@@ -354,7 +546,7 @@ export class MeleeGeneral {
     this.holdTimer = Math.max(this.holdTimer, this.actions[name].getClip().duration);
   }
 
-  // cmd: { attack: bool, auto: bool, point: THREE.Vector3 }
+  // cmd: { auto: bool }
   update(dt, cmd) {
     if (this.mixer) this.mixer.update(dt);
     this.haloTime += dt;
@@ -368,17 +560,19 @@ export class MeleeGeneral {
     this.holdTimer = Math.max(0, this.holdTimer - dt);
     this.ultLock = Math.max(0, this.ultLock - dt);
 
-    // 選定目標
-    if (cmd.attack || cmd.auto) {
-      if (!this.target || this.target.dead) {
-        const ref = cmd.attack ? cmd.point : this.mesh.position;
-        this.target = this.enemyMgr.nearest(ref);
-      }
+    // 目標決策：玩家點選的敵人永遠優先；自動模式撿離自己最近的；否則收兵回原位。
+    // 目標死亡或離場時清除，讓下一幀重新選擇（自動）或返回原位（手動）。
+    if (this.selected && (this.selected.dead || this.selected.removed)) this.selected = null;
+    if (this.target && (this.target.dead || this.target.removed)) this.target = null;
+    if (this.selected) {
+      this.target = this.selected;
+    } else if (cmd.auto) {
+      if (!this.target) this.target = this.enemyMgr.nearest(this.mesh.position);
     } else {
       this.target = null;
     }
 
-    const hunting = this.target && !this.target.dead;
+    const hunting = !!this.target;
     const dest = hunting ? this.target.mesh.position : this.home;
 
     const dx = dest.x - this.mesh.position.x;
@@ -386,9 +580,20 @@ export class MeleeGeneral {
     const dist = Math.hypot(dx, dz) || 0.0001;
     const stopDist = hunting ? this.meleeRange : 0.2;
 
-    // 移動
+    // 衝刺判定（帶遲滯）：只有距離目標夠遠（換目標 / 目標跑遠）才觸發衝刺，
+    // 衝到貼身後解除；近身跟著敵人移動攻擊時用一般速度、不出殘影。
+    if (!hunting) {
+      this.dashing = false;
+    } else if (dist > DASH_TRIGGER_DIST) {
+      this.dashing = true;
+    } else if (dist <= stopDist + 0.3) {
+      this.dashing = false;
+    }
+
+    // 移動：衝刺時全速，其餘（貼身跟隨、收兵回原位）用一般速度
     if (dist > stopDist) {
-      const step = Math.min(this.speed * dt, dist - stopDist);
+      const speed = this.dashing ? this.sprintSpeed : this.speed;
+      const step = Math.min(speed * dt, dist - stopDist);
       this.mesh.position.x += (dx / dist) * step;
       this.mesh.position.z += (dz / dist) * step;
       this.facing = Math.atan2(dx, dz);
@@ -396,6 +601,9 @@ export class MeleeGeneral {
       this.facing = Math.atan2(dx, dz);
     }
     this.mesh.rotation.y = this.facing;
+
+    this.updateSprintFx(dt, this.dashing && dist > stopDist);
+    this.updateTargetRing(dt);
 
     // 揮刀攻擊（傷害節奏維持不變，動作由 mixer 播放）
     this.attackCooldown -= dt;
@@ -407,6 +615,7 @@ export class MeleeGeneral {
         if (this.holdTimer <= 0) this.triggerSlash();
       } else {
         this.target = null;             // 籌碼不足 → 收兵
+        this.selected = null;
       }
       if (this.target && this.target.dead) this.target = null;
     }
