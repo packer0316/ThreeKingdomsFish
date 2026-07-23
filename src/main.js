@@ -4,6 +4,7 @@ import { EnemyManager } from './enemies.js';
 import { BulletManager } from './bullets.js';
 import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
+import { BossShow, hasBossShow } from './bossshow.js';
 import { AIPlayer, MeleeGeneral } from './players.js';
 import { CHARACTERS } from './characters.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
@@ -45,21 +46,51 @@ const bulletMgr = new BulletManager(scene);
 
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
 const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
+// Boss 開獎表演（玩家擊殺鎮守 Boss 觸發；表演期間全場暫停攻擊）
+const bossShow = new BossShow(ui.el.root);
 document.getElementById('scene-badge').textContent = '⚔ ' + currentScene.name;
 
-// 換房若輪到不同場景：整個戰場重建（環境、Boss、小兵、台詞全部換新）
-function switchScene(sceneId) {
-  const next = sceneById(sceneId);
-  if (next.id === currentScene.id) return;
+// 換房一律「完全重建」戰場：即使輪到同一場景，環境、Boss、小兵、
+// 生成計時與腳本狀態全部重新來過（等同重開這一關）。
+function rebuildBattlefield(room) {
+  const next = sceneById(room.sceneId);
+  const sceneChanged = next.id !== currentScene.id;
   currentScene = next;
 
-  hero.clearSelection();                 // 放掉舊場景的鎖定目標
-  buildEnvironment(scene, next.env);     // 拆掉舊環境、重建新環境
-  enemyMgr.setScene(next);               // 清場並套用新 Boss / 官銜 / 台詞
+  hero.clearSelection();                 // 放掉鎖定目標
+  buildEnvironment(scene, next.env);     // 拆掉舊環境、重建環境
+  enemyMgr.setScene(next);               // 清場並重置生成/Boss/官銜/台詞計時
   bossPlate.setBoss(next.boss);
   document.getElementById('scene-badge').textContent = '⚔ ' + next.name;
-  ui.pushMarquee(`⚔ 戰場輪替：進入「${next.name}」！${next.subtitle || ''}`);
-  showSceneBanner();
+  if (sceneChanged) {
+    ui.pushMarquee(`⚔ 戰場輪替：進入「${next.name}」！${next.subtitle || ''}`);
+    showSceneBanner();
+  }
+}
+
+// 換房黑幕讀條轉場（約 1 秒）：黑畫面蓋住 → 讀條跑滿 → 期間完成重建 → 淡出。
+let transitioning = false;
+function runRoomTransition(rebuild) {
+  const overlay = document.getElementById('room-transition');
+  const bar = document.getElementById('room-transition-bar');
+  transitioning = true;
+
+  overlay.classList.remove('hidden');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  void overlay.offsetWidth;              // 強制重排，讓下面的動畫從 0 起跑
+  overlay.classList.add('show');         // 淡入黑幕
+  bar.style.transition = 'width 0.9s linear';
+  bar.style.width = '100%';
+
+  // 螢幕全黑時才重建，讓切換不被看到
+  setTimeout(rebuild, 450);
+
+  // 約 1 秒後淡出、結束轉場
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    setTimeout(() => { overlay.classList.add('hidden'); transitioning = false; }, 320);
+  }, 1000);
 }
 const BOSS_LABEL_HEIGHT = 8.1;   // Boss 頭頂名牌的世界高度（紅纓頂之上）
 
@@ -126,8 +157,11 @@ function renderHud(humanSeat) {
 
 const roomSelect = new RoomSelect();
 roomSelect.onEnter = (room, seatPos) => {
-  applyRoomSeat(room, seatPos);
-  switchScene(room.sceneId);   // 該房輪替到的戰場（不同場景時整個重建）
+  // 黑幕讀條轉場中完成「座位套用 + 戰場完全重建」
+  runRoomTransition(() => {
+    applyRoomSeat(room, seatPos);
+    rebuildBattlefield(room);
+  });
 };
 
 // 初始：休閒41房、玩家坐中座；你的金錢由 state 持續累計，換房不重置
@@ -194,10 +228,7 @@ function attemptSlash(enemy) {
     const s = worldToScreen(enemy.mesh.position.clone().setY(2));
     ui.floatCoin(s.x, s.y, reward);
     burstCoins(enemy.mesh.position.clone());
-    if (enemy.isBoss) {
-      bossPlate.died();   // 死亡台詞停留在倒下位置
-      ui.jackpot(enemy.name, reward, '你（中座）');
-    }
+    if (enemy.isBoss) handleBossDeath(enemy, reward, '你（中座）', true);
     enemyMgr.removeEnemy(enemy);
   }
   return true;
@@ -225,11 +256,26 @@ function onHit(enemy, bullet, hitPos) {
   }
   burstCoins(enemy.mesh.position.clone());
 
-  if (enemy.isBoss) {
-    bossPlate.died();
-    ui.jackpot(enemy.name, reward, owner ? owner.def.name : '你（中座）');
-  }
+  // 鎮守 Boss 陣亡：byPlayer = 最後一擊是否為中座玩家（owner 為 null 時是玩家）
+  if (enemy.isBoss) handleBossDeath(enemy, reward, owner ? owner.def.name : '你（中座）', !owner);
   enemyMgr.removeEnemy(enemy);
+}
+
+// Boss 陣亡統一處理：只有「本人」擊殺且該 Boss 有開獎表演時才進表演；
+// 其他玩家（AI）擊殺或無表演的 Boss，維持一般大獎彈窗。
+function handleBossDeath(enemy, reward, catcher, byPlayer) {
+  bossPlate.died();   // 死亡台詞停留在倒下位置
+  if (byPlayer && hasBossShow(enemy.def.id)) {
+    // 進入開獎表演：以玩家目前下注滾分，結束後才把獎金入袋、恢復戰鬥
+    const bossName = enemy.name;
+    bossShow.play(enemy.def.id, ui.bet, (prize, mult) => {
+      state.coins += prize;
+      ui.refresh();
+      ui.pushMarquee(`🎉 恭喜你（中座）於「${bossName}」開獎表演開出 ×${mult} 倍，獲得 ${prize.toLocaleString('en-US')} 籌碼！`);
+    });
+  } else {
+    ui.jackpot(enemy.name, reward, catcher);
+  }
 }
 
 // ---------- 特效 ----------
@@ -314,6 +360,9 @@ function loop() {
   positionSlots();            // 三人資訊欄對齊各座位武將
   if (!running) { renderer.render(scene, camera); return; }
 
+  // Boss 開獎表演 / 換房轉場中：全場暫停（玩家 / AI / 敵軍 / 砲彈皆停），只維持渲染
+  if (bossShow.active || transitioning) { renderer.render(scene, camera); return; }
+
   // 中座近戰武將：點選的敵人優先；開啟自動時沒點選就追擊最近的敵人
   hero.update(dt, { auto: ui.auto });
 
@@ -364,8 +413,8 @@ function showSceneBanner() {
 
 // 供主控台除錯 / 自動化測試使用
 window.__game = {
-  hero, enemyMgr, ui, camera, bossPlate, scene, roomSelect,
-  switchScene,
+  hero, enemyMgr, ui, camera, bossPlate, bossShow, scene, roomSelect,
+  rebuildBattlefield, runRoomTransition,
   get currentScene() { return currentScene; },
 };
 

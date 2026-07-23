@@ -75,6 +75,48 @@ html, body {
   border-color: rgba(255,160,120,.5);
 }
 
+/* ---------- 換房黑幕讀條轉場 ---------- */
+#room-transition {
+  position: absolute;
+  inset: 0;
+  z-index: 60;                 /* 蓋住戰場與 HUD，但低於選房彈窗(50)以上、開獎(70)以下 */
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: all;
+}
+#room-transition.show { opacity: 1; }
+#room-transition.hidden { display: none; }
+.rt-inner {
+  width: min(420px, 72vw);
+  text-align: center;
+}
+.rt-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #ffd77a;
+  text-shadow: 0 2px 6px #000;
+  margin-bottom: 16px;
+}
+.rt-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 215, 122, 0.12);
+  border: 1px solid rgba(255, 205, 122, 0.4);
+  overflow: hidden;
+}
+.rt-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c47a10, #ffd77a, #fff3c8);
+  box-shadow: 0 0 12px rgba(255, 200, 90, 0.7);
+}
+
 /* ---------- 選房頁面 ---------- */
 #room-modal {
   position: absolute;
@@ -695,4 +737,252 @@ html, body {
   color: #ffe9b0;
   background: linear-gradient(180deg, #7a5a18, #4a3208);
   border: 1px solid rgba(255,215,122,.55);
+}
+
+/* ==================== Boss 開獎表演（bossShow） ==================== */
+#bossshow {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  opacity: 0;
+  transition: opacity 0.5s;
+  user-select: none;
+}
+#bossshow.show { opacity: 1; }
+#bossshow.hidden { display: none; }
+
+/* 底幕：故事段半透明壓暗，選樹前加深為全黑（壓黑畫面） */
+.bs-veil {
+  position: absolute;
+  inset: 0;
+  background: #050302;
+  opacity: 0.86;
+  transition: opacity 0.9s;
+}
+.bs-veil.black { opacity: 1; }
+
+/* 表演標題（望梅止渴） */
+.bs-head {
+  position: absolute;
+  top: 5%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+}
+.bs-head-sub {
+  font-size: 15px;
+  color: #d8b06a;
+  letter-spacing: 6px;
+}
+.bs-head-title {
+  margin-top: 4px;
+  font-size: 42px;
+  font-weight: 900;
+  color: #ffd77a;
+  letter-spacing: 14px;
+  text-shadow: 0 0 18px rgba(255, 180, 60, 0.55), 0 3px 6px rgba(0, 0, 0, 0.85);
+}
+
+/* 故事圖卡：交叉淡入淡出 */
+.bs-slide {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: min(72vw, 900px);
+  transform: translate(-50%, -50%) scale(0.96);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.8s, transform 0.8s;
+  pointer-events: none;
+}
+.bs-slide.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.bs-img {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 3px solid rgba(255, 205, 122, 0.5);
+  background: #100c08;
+  box-shadow: 0 10px 60px rgba(0, 0, 0, 0.8);
+}
+.bs-caption {
+  margin-top: 14px;
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: #ffe9bd;
+  text-shadow: 0 2px 4px #000;
+}
+
+/* 跳過故事段 */
+.bs-skip {
+  position: absolute;
+  top: 46px;
+  right: 18px;
+  padding: 6px 14px;
+  font-size: 14px;
+  color: #ffd77a;
+  background: rgba(20, 12, 6, 0.7);
+  border: 1px solid rgba(255, 205, 122, 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.bs-skip:hover { background: rgba(60, 36, 14, 0.85); }
+.bs-skip.hidden { display: none; }
+
+/* 三選一開獎（選樹） */
+.bs-choice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+}
+.bs-choice.hidden { display: none; }
+.bs-prompt {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffe9bd;
+  text-shadow: 0 0 12px rgba(255, 170, 60, 0.4), 0 2px 4px #000;
+}
+.bs-trees { display: flex; gap: 40px; }
+.bs-tree {
+  width: 170px;
+  padding: 26px 0 20px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(60, 40, 20, 0.92), rgba(30, 18, 8, 0.96));
+  border: 2px solid rgba(255, 205, 122, 0.45);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  animation: bsTreeIn 0.5s backwards;
+}
+.bs-tree:hover {
+  transform: translateY(-8px) scale(1.05);
+  border-color: #ffd15a;
+  box-shadow: 0 0 22px rgba(255, 200, 80, 0.5);
+}
+@keyframes bsTreeIn {
+  from { opacity: 0; transform: translateY(30px); }
+}
+.bs-tree-fig {
+  height: 150px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.bs-tree-img {
+  width: 128px;
+  height: 150px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+.bs-tree-label {
+  margin-top: 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffd77a;
+}
+.bs-tree.revealed { cursor: default; }
+.bs-tree.revealed:hover {
+  transform: none;
+  border-color: rgba(255, 205, 122, 0.45);
+  box-shadow: none;
+}
+.bs-tree.revealed.picked,
+.bs-tree.revealed.picked:hover {
+  border-color: #ffd15a;
+  box-shadow: 0 0 26px rgba(255, 210, 90, 0.75);
+  transform: scale(1.06);
+}
+.bs-tree.plum {
+  background: linear-gradient(180deg, rgba(96, 30, 42, 0.95), rgba(42, 12, 18, 0.96));
+}
+.bs-tree.plum .bs-tree-fig { animation: bsPlumPop 0.6s; }
+@keyframes bsPlumPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35) rotate(-6deg); }
+  100% { transform: scale(1); }
+}
+
+/* 華麗滾分 */
+.bs-prize {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  animation: bsPrizePop 0.45s;   /* 保留置中位移的彈出（避免動畫期間偏移到右下） */
+}
+@keyframes bsPrizePop {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  70%  { transform: translate(-50%, -50%) scale(1.08); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+.bs-prize.hidden { display: none; }
+.bs-rays {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 620px;
+  height: 620px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 210, 110, 0.16) 0 9deg, transparent 9deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 66%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 66%);
+  animation: bsRays 14s linear infinite;
+  pointer-events: none;
+}
+@keyframes bsRays {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.bs-prize-title {
+  position: relative;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: #ffe9bd;
+  text-shadow: 0 0 14px rgba(255, 160, 40, 0.6), 0 3px 6px #000;
+}
+.bs-prize.big .bs-prize-title { font-size: 42px; color: #ffec9e; }
+.bs-mult {
+  position: relative;
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffd15a;
+  text-shadow: 0 2px 4px #000;
+}
+.bs-amount {
+  position: relative;
+  margin-top: 10px;
+  font-size: 78px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #fff3c8, #ffd15a 55%, #d88a1a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 18px rgba(255, 170, 40, 0.4));
+}
+.bs-prize-sub {
+  position: relative;
+  margin-top: 8px;
+  font-size: 18px;
+  color: #ffd77a;
+}
+.bs-prize.celebrate .bs-amount { animation: bsAmountPop 0.5s; }
+.bs-prize.celebrate .bs-rays { animation-duration: 5s; }
+@keyframes bsAmountPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
 }
