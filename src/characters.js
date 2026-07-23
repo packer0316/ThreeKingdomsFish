@@ -36,6 +36,7 @@ export const CHARACTERS = {
     yaw: 0,
     // FBX 材質引用 GuanYu.jpg（身體）與 GreenDragon.jpg（青龍偃月刀），改指向打包後的資源
     textureMap: { 'guanyu.jpg': guanyuTex, 'greendragon.jpg': greenDragonTex },
+    brighten: 2.1,   // 模型偏暗 → 以 shader 提亮（光照前基礎色 + 光照後輸出色）
     clips: { idle: [66, 126], attack1: [213, 278], attack2: [284, 396], attack3: [822, 886], attack4: [892, 952] },
     attackCycle: ['attack1', 'attack2', 'attack3', 'attack4'],
   },
@@ -90,6 +91,23 @@ export function loadCharacter(def) {
               if (m.color) m.color.set(0xffffff);
             } else if (m.map) {
               m.map.colorSpace = THREE.SRGBColorSpace;   // 多材質：修正既有貼圖色彩空間
+            }
+            // 以 shader 提亮偏暗的模型：
+            //  1) 光照前把基礎色乘上係數（讓固有色更鮮明）
+            //  2) 光照後再乘最終輸出色（不受場景光影響，保證整體變亮）
+            if (def.brighten && def.brighten !== 1) {
+              m.onBeforeCompile = (shader) => {
+                shader.uniforms.uBrighten = { value: def.brighten };
+                shader.fragmentShader = 'uniform float uBrighten;\n' + shader.fragmentShader
+                  .replace(
+                    '#include <map_fragment>',
+                    '#include <map_fragment>\n  diffuseColor.rgb *= mix(1.0, uBrighten, 0.6);'
+                  )
+                  .replace(
+                    '#include <dithering_fragment>',
+                    '#include <dithering_fragment>\n  gl_FragColor.rgb *= uBrighten;'
+                  );
+              };
             }
             m.needsUpdate = true;
           };
