@@ -5,6 +5,11 @@ import * as THREE from 'three';
 
 const SKIN = 0xe8b98a;
 
+// 持握俯仰角：讓武器與前臂（armR 已 rotation.x = -0.5）大致垂直。
+// 前臂沿 armR 的 -Y，武器幾何沿 +Y；繞 +X 的「正角」才會把 +Y 轉向 +Z（面朝方向）。
+// 世界俯仰 = -0.5 + GRIP_PITCH ≈ +1.35 → 刀身朝前、略上揚（負角會變成朝後拿反）。
+const GRIP_PITCH = 1.85;
+
 // 角色一律使用便宜的 Lambert 材質（不需 PBR），大幅降低 shader 負擔。
 function mat(color, opts = {}) {
   return new THREE.MeshLambertMaterial({ color, ...opts });
@@ -107,9 +112,14 @@ export function makeSoldier(def) {
   armR.rotation.x = -0.5;
   g.add(armR);
 
-  // 武器掛在右手
+  // 武器握在右手：近戰武器與前臂垂直（刀 / 槍朝前微上），不再沿手臂縱向穿過手臂
   const weapon = makeWeapon(def.weapon);
-  weapon.position.y = -0.75;
+  if (def.weapon === 'bow') {
+    weapon.position.y = -0.75;                  // 弓維持原本握法
+  } else {
+    weapon.position.set(0, -0.62, 0);
+    weapon.rotation.x = GRIP_PITCH;
+  }
   armR.add(weapon);
 
   // 記錄可動部位供走路動畫
@@ -273,11 +283,321 @@ function makeWeapon(type) {
   return g;
 }
 
+// ---------- 曹操（赤壁 Boss 專屬造型）----------
+// 依魏武帝形象細作：不戴兜鍪，束髮金冠＋上揚黑髮、細眉、八字鬍與山羊鬍；
+// 藍紫錦袍配深紫胸甲、交領金邊、高立領，腰繫赤褐大帶佩玉，
+// 背披紫青大氅，右手持「倚天劍」（直身雙刃劍，金吞口鑲紅玉）。
+// 可動部位與其他 Boss 相同（userData.parts = { legL, legR, armR }）。
+function makeCaoCao(def) {
+  const g = new THREE.Group();
+  const ROBE = 0x2f4fa2;    // 錦袍藍
+  const ARMOR = 0x283058;   // 胸甲深紫藍
+  const NAVY = 0x1c2240;    // 裙甲/護腕深藍
+  const PURPLE = 0x453a78;  // 側裙/內襯紫
+  const GOLD = 0xd8a83a;    // 金飾
+  const HAIR = 0x181320;    // 髮鬚墨黑
+  const SASH = 0x6e2a20;    // 赤褐腰帶
+
+  // ---- 腿（髖部樞紐；勁裝長褲＋金護膝＋翹尖官靴）----
+  const makeLeg = (side) => {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.26, 1.2, 0);
+    const thigh = box(0.34, 0.58, 0.4, 0x232438);
+    thigh.position.y = -0.28;
+    leg.add(thigh);
+    const knee = box(0.32, 0.14, 0.36, GOLD, metalMat(GOLD));
+    knee.position.y = -0.6;
+    leg.add(knee);
+    const shin = box(0.3, 0.52, 0.34, 0x191a26);
+    shin.position.y = -0.84;
+    leg.add(shin);
+    const boot = box(0.38, 0.28, 0.56, 0x14141c);
+    boot.position.set(0, -1.06, 0.05);
+    leg.add(boot);
+    const bootTip = box(0.28, 0.16, 0.18, 0x14141c);   // 翹起的靴尖
+    bootTip.position.set(0, -1.0, 0.38);
+    bootTip.rotation.x = -0.55;
+    leg.add(bootTip);
+    const bootTrim = box(0.4, 0.07, 0.58, GOLD, metalMat(GOLD)); // 靴口金邊
+    bootTrim.position.set(0, -0.93, 0.05);
+    leg.add(bootTrim);
+    g.add(leg);
+    return leg;
+  };
+  const legL = makeLeg(-1);
+  const legR = makeLeg(1);
+
+  // ---- 袍裙：前後深藍擺片（金襬）＋兩側紫裙＋中央銀札甲短簾 ----
+  const skirtF = box(0.85, 0.62, 0.1, NAVY);
+  skirtF.position.set(0, 1.05, 0.3);
+  skirtF.rotation.x = 0.16;
+  g.add(skirtF);
+  const hemF = box(0.85, 0.09, 0.11, GOLD, metalMat(GOLD));
+  hemF.position.set(0, 0.78, 0.37);
+  hemF.rotation.x = 0.16;
+  g.add(hemF);
+  const skirtB = box(0.9, 0.66, 0.1, NAVY);
+  skirtB.position.set(0, 1.03, -0.3);
+  skirtB.rotation.x = -0.16;
+  g.add(skirtB);
+  for (const side of [-1, 1]) {
+    const skirtS = box(0.1, 0.6, 0.6, PURPLE);
+    skirtS.position.set(side * 0.5, 1.05, 0);
+    skirtS.rotation.z = side * -0.14;
+    g.add(skirtS);
+  }
+  for (let i = -1; i <= 1; i++) {
+    const lame = box(0.14, 0.46, 0.05, 0x9aa0b4, metalMat(0x9aa0b4));
+    lame.position.set(i * 0.17, 1.04, 0.38);
+    lame.rotation.x = 0.16;
+    g.add(lame);
+  }
+
+  // ---- 軀幹：深紫胸甲＋紫錦胸面＋交領金邊＋金胸釦 ----
+  const torso = box(1.08, 1.15, 0.66, ARMOR, metalMat(ARMOR));
+  torso.position.y = 2.0;
+  g.add(torso);
+  const chest = box(0.92, 0.8, 0.1, PURPLE);
+  chest.position.set(0, 2.1, 0.36);
+  g.add(chest);
+  for (const side of [-1, 1]) {
+    const lapel = box(0.52, 0.09, 0.06, GOLD, metalMat(GOLD)); // 交領（V 領金緣）
+    lapel.position.set(side * 0.21, 2.42, 0.42);
+    lapel.rotation.z = side * 0.72;
+    g.add(lapel);
+  }
+  const brooch = sph(0.09, GOLD, metalMat(GOLD));   // 領口金釦
+  brooch.position.set(0, 2.22, 0.44);
+  g.add(brooch);
+  const waistTrim = box(0.7, 0.05, 0.06, GOLD, metalMat(GOLD)); // 腹甲金紋
+  waistTrim.position.set(0, 1.84, 0.38);
+  g.add(waistTrim);
+
+  // 腰帶＋金帶鉤＋玉佩
+  const belt = box(1.12, 0.2, 0.72, SASH);
+  belt.position.y = 1.5;
+  g.add(belt);
+  const buckle = box(0.26, 0.15, 0.06, GOLD, metalMat(GOLD));
+  buckle.position.set(0, 1.5, 0.4);
+  g.add(buckle);
+  const jadeCord = box(0.03, 0.12, 0.03, GOLD, metalMat(GOLD));
+  jadeCord.position.set(0.3, 1.36, 0.38);
+  g.add(jadeCord);
+  const jade = cyl(0.08, 0.08, 0.03, 0x7ac0a0, 10);
+  jade.rotation.x = Math.PI / 2;
+  jade.position.set(0.3, 1.24, 0.38);
+  g.add(jade);
+
+  // ---- 高立領（後高前開，襯出頭部；金緣）----
+  const collarB = box(0.7, 0.5, 0.1, ARMOR, metalMat(ARMOR));
+  collarB.position.set(0, 2.74, -0.3);
+  collarB.rotation.x = 0.22;
+  g.add(collarB);
+  const collarEdge = box(0.72, 0.06, 0.11, GOLD, metalMat(GOLD));
+  collarEdge.position.set(0, 2.98, -0.36);
+  collarEdge.rotation.x = 0.22;
+  g.add(collarEdge);
+  for (const side of [-1, 1]) {
+    const collarS = box(0.1, 0.44, 0.4, ARMOR, metalMat(ARMOR));
+    collarS.position.set(side * 0.36, 2.72, -0.08);
+    collarS.rotation.z = side * -0.18;
+    collarS.rotation.y = side * 0.3;
+    g.add(collarS);
+  }
+
+  // ---- 圓肩甲（覆於錦袖上，金緣托底）----
+  for (const side of [-1, 1]) {
+    const pad = sph(0.34, ARMOR, metalMat(ARMOR));
+    pad.scale.set(1.15, 0.75, 1.05);
+    pad.position.set(side * 0.72, 2.56, 0.02);
+    g.add(pad);
+    const rim = box(0.42, 0.07, 0.58, GOLD, metalMat(GOLD));
+    rim.position.set(side * 0.82, 2.38, 0.02);
+    rim.rotation.z = side * -0.3;
+    g.add(rim);
+  }
+
+  // ---- 左臂（垂持；錦袖＋深藍護腕金線）----
+  const armL = box(0.3, 0.95, 0.3, ROBE);
+  armL.position.set(-0.8, 1.98, 0.05);
+  g.add(armL);
+  const cuffGoldL = box(0.37, 0.06, 0.37, GOLD, metalMat(GOLD));
+  cuffGoldL.position.set(-0.8, 1.66, 0.05);
+  g.add(cuffGoldL);
+  const cuffL = box(0.36, 0.26, 0.36, NAVY, metalMat(NAVY));
+  cuffL.position.set(-0.8, 1.5, 0.05);
+  g.add(cuffL);
+  const handL = sph(0.15, SKIN);
+  handL.position.set(-0.8, 1.28, 0.05);
+  g.add(handL);
+
+  // ---- 右臂（揮擊樞紐）＋ 倚天劍 ----
+  const armR = new THREE.Group();
+  armR.position.set(0.8, 2.42, 0.12);
+  armR.rotation.x = -0.5;
+  const armRm = box(0.3, 0.9, 0.3, ROBE);
+  armRm.position.y = -0.38;
+  armR.add(armRm);
+  const cuffGoldR = box(0.37, 0.06, 0.37, GOLD, metalMat(GOLD));
+  cuffGoldR.position.y = -0.64;
+  armR.add(cuffGoldR);
+  const cuffR = box(0.36, 0.26, 0.36, NAVY, metalMat(NAVY));
+  cuffR.position.y = -0.8;
+  armR.add(cuffR);
+  const handR = sph(0.16, SKIN);
+  handR.position.y = -1.02;
+  armR.add(handR);
+
+  // 倚天劍：墨柄金線、金吞口鑲紅玉、亮銀直刃（近格處鏨金銘文）
+  const sword = new THREE.Group();
+  sword.position.y = -1.02;
+  sword.rotation.x = GRIP_PITCH;   // 與前臂垂直、劍尖朝前微揚（同其他武將握法）
+  sword.rotation.x = GRIP_PITCH;   // 劍身與前臂垂直、朝前
+  const grip = cyl(0.05, 0.055, 0.46, 0x241a30, 8);
+  sword.add(grip);
+  for (const dy of [-0.1, 0.1]) {
+    const wire = cyl(0.056, 0.056, 0.035, GOLD, 8, metalMat(GOLD));
+    wire.position.y = dy;
+    sword.add(wire);
+  }
+  const pommel = sph(0.07, GOLD, metalMat(GOLD));
+  pommel.position.y = -0.28;
+  sword.add(pommel);
+  const guard = box(0.42, 0.09, 0.16, GOLD, metalMat(GOLD));
+  guard.position.y = 0.28;
+  sword.add(guard);
+  for (const side of [-1, 1]) {
+    const tipBall = sph(0.05, GOLD, metalMat(GOLD));
+    tipBall.position.set(side * 0.21, 0.28, 0);
+    sword.add(tipBall);
+  }
+  const gem = sph(0.045, 0xc02030, metalMat(0xc02030));
+  gem.position.set(0, 0.3, 0.09);
+  sword.add(gem);
+  const blade = box(0.15, 1.65, 0.05, 0xe8ecf6, metalMat(0xe8ecf6));
+  blade.position.y = 1.12;
+  sword.add(blade);
+  const inscription = box(0.05, 0.5, 0.052, GOLD, metalMat(GOLD));
+  inscription.position.y = 0.62;
+  sword.add(inscription);
+  const bladeTip = cyl(0.0, 0.08, 0.28, 0xe8ecf6, 4, metalMat(0xe8ecf6));
+  bladeTip.scale.z = 0.32;             // 壓扁成刃形（縮放網格，不影響共用幾何體）
+  bladeTip.position.y = 2.08;
+  sword.add(bladeTip);
+  armR.add(sword);
+  g.add(armR);
+
+  // ---- 頭：細眉、八字鬍、山羊鬍（不戴盔）----
+  const neck = cyl(0.16, 0.2, 0.24, SKIN, 8);
+  neck.position.y = 2.72;
+  g.add(neck);
+  const head = sph(0.4, SKIN);
+  head.position.y = 3.06;
+  g.add(head);
+  for (const side of [-1, 1]) {
+    const brow = box(0.18, 0.05, 0.05, HAIR);
+    brow.position.set(side * 0.15, 3.18, 0.34);
+    brow.rotation.z = side * 0.15;   // 微挑眉 → 梟雄自得之相
+    g.add(brow);
+  }
+  for (const side of [-1, 1]) {
+    const mustache = box(0.16, 0.045, 0.05, HAIR);   // 八字鬍
+    mustache.position.set(side * 0.12, 2.94, 0.36);
+    mustache.rotation.z = side * -0.35;
+    g.add(mustache);
+  }
+  const jawBeard = box(0.34, 0.12, 0.06, HAIR);      // 頷下短髭
+  jawBeard.position.set(0, 2.82, 0.3);
+  g.add(jawBeard);
+  const goatee = box(0.15, 0.32, 0.09, HAIR);        // 山羊鬍
+  goatee.position.set(0, 2.7, 0.3);
+  goatee.rotation.x = 0.1;
+  g.add(goatee);
+
+  // ---- 髮：後攏髮罩＋鬢角＋上揚髮束＋髮髻 ----
+  const hairCap = sph(0.43, HAIR);
+  hairCap.scale.set(1.0, 0.85, 1.0);
+  hairCap.position.set(0, 3.24, -0.1);   // 上移後收，露出額頭與眉眼
+  g.add(hairCap);
+  for (const side of [-1, 1]) {
+    const sideburn = box(0.08, 0.22, 0.1, HAIR);
+    sideburn.position.set(side * 0.36, 2.98, 0.16);
+    g.add(sideburn);
+  }
+  const spikes = [
+    { x: 0, z: -0.16, rx: 0.5, rz: 0 },       // 後束
+    { x: -0.16, z: -0.08, rx: 0.4, rz: 0.35 },
+    { x: 0.16, z: -0.08, rx: 0.4, rz: -0.35 },
+    { x: 0, z: 0.12, rx: -0.2, rz: 0 },       // 前額上揚
+  ];
+  for (const sp of spikes) {
+    const tuft = cyl(0.0, 0.09, 0.34, HAIR, 5);
+    tuft.position.set(sp.x, 3.6, sp.z);
+    tuft.rotation.x = sp.rx;
+    tuft.rotation.z = sp.rz;
+    g.add(tuft);
+  }
+  const bun = sph(0.12, HAIR);
+  bun.position.set(0, 3.64, -0.02);
+  g.add(bun);
+
+  // ---- 束髮金冠：金環座＋前立板＋雙翅上揚＋紅玉＋橫貫金簪 ----
+  const crownBase = cyl(0.13, 0.15, 0.12, GOLD, 8, metalMat(GOLD));
+  crownBase.position.set(0, 3.62, 0.04);
+  g.add(crownBase);
+  const crownPlate = box(0.16, 0.17, 0.05, GOLD, metalMat(GOLD));
+  crownPlate.position.set(0, 3.74, 0.08);
+  g.add(crownPlate);
+  for (const side of [-1, 1]) {
+    const wing = box(0.05, 0.26, 0.04, GOLD, metalMat(GOLD));
+    wing.position.set(side * 0.12, 3.78, 0.05);
+    wing.rotation.z = side * -0.5;
+    g.add(wing);
+  }
+  const crownGem = sph(0.045, 0xc02030, metalMat(0xc02030));
+  crownGem.position.set(0, 3.66, 0.16);
+  g.add(crownGem);
+  const hairpin = cyl(0.02, 0.02, 0.5, GOLD, 6, metalMat(GOLD));
+  hairpin.rotation.z = Math.PI / 2;
+  hairpin.position.set(0, 3.6, -0.02);
+  g.add(hairpin);
+
+  // ---- 紫青大氅（金襬、金肩釦）----
+  const capeShape = new THREE.Shape();
+  capeShape.moveTo(-0.55, 0.85);
+  capeShape.lineTo(0.55, 0.85);
+  capeShape.lineTo(0.95, -1.1);
+  capeShape.lineTo(-0.95, -1.1);
+  capeShape.closePath();
+  const cape = new THREE.Mesh(
+    new THREE.ShapeGeometry(capeShape),
+    mat(0x241a44, { side: THREE.DoubleSide })
+  );
+  cape.position.set(0, 2.05, -0.5);
+  cape.rotation.x = 0.14;
+  g.add(cape);
+  const capeHem = box(1.8, 0.09, 0.05, GOLD, metalMat(GOLD));
+  capeHem.position.set(0, 0.96, -0.68);
+  capeHem.rotation.x = 0.14;
+  g.add(capeHem);
+  for (const side of [-1, 1]) {
+    const clasp = sph(0.08, GOLD, metalMat(GOLD));
+    clasp.position.set(side * 0.45, 2.75, -0.3);
+    g.add(clasp);
+  }
+
+  g.userData.parts = { legL, legR, armR };
+  g.scale.setScalar(def.scale || 1.8);
+  return g;
+}
+
 // ---------- 敵將 Boss ----------
 // 精緻版守關大將：鐵甲＋陣營色胸甲、雙層肩甲、裙甲、兜鍪紅纓、
 // 怒眉絡腮鬍、長柄大刀與披風金釦。可動部位與小兵相同
 // （userData.parts = { legL, legR, armR }），沿用既有走路/揮臂動畫。
+// 具專屬造型的武將（曹操）在此分流。
 export function makeBoss(def) {
+  if (def.id === 'caocao') return makeCaoCao(def);
   const g = new THREE.Group();
   const ARMOR = def.faction;     // 陣營主色（胸甲/臂甲/裙甲）
   const IRON = 0x34343e;         // 鐵甲底色
@@ -393,6 +713,7 @@ export function makeBoss(def) {
 
   const saber = new THREE.Group();
   saber.position.y = -1.05;
+  saber.rotation.x = GRIP_PITCH;   // 長柄大刀與前臂垂直、朝前
   const shaft = cyl(0.06, 0.06, 3.0, 0x2c1a0e, 8);
   shaft.position.y = 0.4;
   saber.add(shaft);

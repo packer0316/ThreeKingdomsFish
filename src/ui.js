@@ -1,4 +1,4 @@
-import { BET_LEVELS, GENERALS, MARQUEE_NAMES, MARQUEE_TARGETS, ROOMS, ROOMS_PER_PAGE } from './config.js';
+import { BET_LEVELS, GENERALS, MARQUEE_NAMES, MARQUEE_TARGETS, ROOMS, ROOMS_PER_PAGE, sceneById } from './config.js';
 
 // HUD / UI 控制 ------------------------------------------------
 
@@ -227,8 +227,12 @@ export class RoomSelect {
         })
         .join('');
 
+      // 該房目前輪替到的戰場場景
+      const sceneName = sceneById(room.sceneId).name;
+
       row.innerHTML =
-        `<div class="room-row-name">${room.name}</div>` +
+        `<div class="room-row-name">${room.name}` +
+          `<span class="room-scene">⚔ ${sceneName}</span></div>` +
         `<div class="room-seats">${seats}</div>` +
         `<div class="room-occ">${dots}<span class="room-occ-count">${taken}/3</span></div>`;
 
@@ -283,6 +287,17 @@ export class BossPlate {
     this.bubble = document.createElement('div');
     this.bubble.className = 'boss-bubble';
     root.appendChild(this.bubble);
+  }
+
+  // 換場景：改追蹤新的 Boss 定義，重置名牌與泡泡
+  setBoss(bossDef) {
+    this.bossDef = bossDef;
+    this.boss = null;
+    this.sayT = 0;
+    this.bubble.classList.remove('show');
+    this.plate.innerHTML =
+      `<span class="boss-plate-title">${bossDef.title || ''}</span>` +
+      `<span class="boss-plate-name">${bossDef.name}</span>`;
   }
 
   // 顯示一句台詞

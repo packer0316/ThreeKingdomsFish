@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { createWorld, updateSceneFx } from './scene.js';
+import { createWorld, updateSceneFx, buildEnvironment } from './scene.js';
 import { EnemyManager } from './enemies.js';
 import { BulletManager } from './bullets.js';
 import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
 import { AIPlayer, MeleeGeneral } from './players.js';
 import { CHARACTERS } from './characters.js';
-import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, CURRENT_SCENE, ROOMS } from './config.js';
+import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
 
@@ -32,18 +32,35 @@ function reportGPU(renderer) {
 }
 
 const canvas = document.getElementById('scene');
-const { renderer, scene, camera } = createWorld(canvas);
+// 起始場景 = 初始房間（休閒41房）輪替到的戰場
+let currentScene = sceneById(ROOMS[0].sceneId);
+const { renderer, scene, camera } = createWorld(canvas, currentScene.env);
 reportGPU(renderer);
 
 const state = { coins: START_COINS };
 const ui = new UI(state);
 
-const enemyMgr = new EnemyManager(scene, CURRENT_SCENE);
+const enemyMgr = new EnemyManager(scene, currentScene);
 const bulletMgr = new BulletManager(scene);
 
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
-const bossPlate = new BossPlate(ui.el.root, CURRENT_SCENE.boss);
-document.getElementById('scene-badge').textContent = '⚔ ' + CURRENT_SCENE.name;
+const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
+document.getElementById('scene-badge').textContent = '⚔ ' + currentScene.name;
+
+// 換房若輪到不同場景：整個戰場重建（環境、Boss、小兵、台詞全部換新）
+function switchScene(sceneId) {
+  const next = sceneById(sceneId);
+  if (next.id === currentScene.id) return;
+  currentScene = next;
+
+  hero.clearSelection();                 // 放掉舊場景的鎖定目標
+  buildEnvironment(scene, next.env);     // 拆掉舊環境、重建新環境
+  enemyMgr.setScene(next);               // 清場並套用新 Boss / 官銜 / 台詞
+  bossPlate.setBoss(next.boss);
+  document.getElementById('scene-badge').textContent = '⚔ ' + next.name;
+  ui.pushMarquee(`⚔ 戰場輪替：進入「${next.name}」！${next.subtitle || ''}`);
+  showSceneBanner();
+}
 const BOSS_LABEL_HEIGHT = 8.1;   // Boss 頭頂名牌的世界高度（紅纓頂之上）
 
 // ---------- 中座玩家：近戰武將 ----------
@@ -108,7 +125,10 @@ function renderHud(humanSeat) {
 }
 
 const roomSelect = new RoomSelect();
-roomSelect.onEnter = (room, seatPos) => applyRoomSeat(room, seatPos);
+roomSelect.onEnter = (room, seatPos) => {
+  applyRoomSeat(room, seatPos);
+  switchScene(room.sceneId);   // 該房輪替到的戰場（不同場景時整個重建）
+};
 
 // 初始：休閒41房、玩家坐中座；你的金錢由 state 持續累計，換房不重置
 applyRoomSeat(ROOMS[0], roomSelect.currentSeat);
@@ -301,7 +321,7 @@ function loop() {
   for (const p of aiPlayers) p.update(dt);
 
   enemyMgr.update(dt, (boss) => {
-    ui.pushMarquee(`⚔ ${CURRENT_SCENE.name}守將「${boss.name}」出關搦戰！斬其首級可奪大獎！`);
+    ui.pushMarquee(`⚔ ${currentScene.name}守將「${boss.name}」出關搦戰！斬其首級可奪大獎！`);
   });
   bulletMgr.update(dt, enemyMgr.enemies, onHit);
   updateEffects(dt);
@@ -329,8 +349,10 @@ document.getElementById('start-btn').addEventListener('click', () => {
 // 場景開幕橫幅：入場時亮出關卡名與故事引言，數秒後淡出
 function showSceneBanner() {
   const banner = document.getElementById('scene-banner');
-  document.getElementById('scene-banner-name').textContent = CURRENT_SCENE.name;
-  document.getElementById('scene-banner-story').textContent = CURRENT_SCENE.story;
+  document.getElementById('scene-banner-name').textContent = currentScene.name;
+  document.getElementById('scene-banner-story').textContent = currentScene.story;
+  const sub = document.querySelector('#scene-banner .scene-banner-sub');
+  if (sub) sub.textContent = `— ${currentScene.subtitle || '三國戰場'} —`;
   banner.classList.remove('hidden');
   void banner.offsetWidth;   // 重觸發動畫
   banner.classList.add('show');
@@ -341,7 +363,11 @@ function showSceneBanner() {
 }
 
 // 供主控台除錯 / 自動化測試使用
-window.__game = { hero, enemyMgr, ui, camera, bossPlate };
+window.__game = {
+  hero, enemyMgr, ui, camera, bossPlate, scene, roomSelect,
+  switchScene,
+  get currentScene() { return currentScene; },
+};
 
 // ---------- 視窗縮放 ----------
 window.addEventListener('resize', () => {

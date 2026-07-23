@@ -209,6 +209,32 @@ export class EnemyManager {
     this.targetShoutCd = 0;     // 被鎖定驚呼的節流（避免連點洗屏）
   }
 
+  // 換房切場景：清空場上所有敵人與對話，依新場景設定整組重建
+  setScene(sceneDef) {
+    for (const s of this.speakers) s.enemy.mesh.remove(s.sprite);
+    this.speakers.length = 0;
+    this.pendingReplies.length = 0;
+    for (const e of this.enemies) {
+      e.removed = true;                 // 讓武將/弓手放掉手上的目標
+      this.scene.remove(e.mesh);
+    }
+    this.enemies.length = 0;
+
+    this.sceneDef = sceneDef;
+    this.boss = null;
+    this.bossTimer = sceneDef.boss.firstSpawn;
+    this.spawnTimer = 1;
+    this.eliteTitles = sceneDef.eliteTitles ? [...sceneDef.eliteTitles] : [];
+    this.eliteChance = sceneDef.eliteChance ?? 0.22;
+    this.eliteCooldowns.length = 0;
+    this.soldierQuotes = sceneDef.soldierQuotes || [];
+    this.soldierDialogues = sceneDef.soldierDialogues || [];
+    this.targetedQuotes = sceneDef.targetedQuotes || [];
+    this.bossDownQuotes = sceneDef.bossDownQuotes || [];
+    this.chatterTimer = 4;
+    this.targetShoutCd = 0;
+  }
+
   // 讓一隻小兵說話（頭上掛對話泡泡，duration 秒後收回）
   saySoldier(enemy, text, duration = 3.2) {
     const sprite = makeSpeechBubble(text);

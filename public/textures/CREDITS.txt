@@ -14,3 +14,9 @@ wood     Planks016              關門木門 / 木構件
 
 每組含 color.jpg (Albedo)、normal.jpg (OpenGL Normal)、rough.jpg (Roughness)。
 License: https://docs.ambientcg.com/license/
+
+赤壁場景補充：
+- 船體甲板 / 桅杆沿用 wood (Planks016)、赤壁崖沿用 cliff (Rock030) 加紅色調、
+  艉樓樓身沿用 wood 染朱紅（上漆木板）。
+- 江面波紋法線貼圖為程式即時生成（無外部素材）；帆布、天空、摩崖石刻、
+  屋頂筒瓦（艉樓 / 城樓共用）為 canvas 繪製。
