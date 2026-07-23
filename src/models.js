@@ -166,6 +166,67 @@ export function makeTitleLabel(text) {
   return sp;
 }
 
+// ---------- 小兵對話泡泡（閒談台詞）----------
+// 寬度依字數自適應，底部帶指向小兵的尾巴；同一句台詞共用貼圖。
+const _bubbleTextures = new Map();
+function bubbleTexture(text) {
+  let entry = _bubbleTextures.get(text);
+  if (entry) return entry;
+
+  const font = '700 46px "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = font;
+  const textW = measure.measureText(text).width;
+
+  const w = Math.ceil(textW + 88);
+  const h = 128;                    // 上方泡泡本體 96 + 下方尾巴
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+
+  ctx.beginPath();
+  ctx.roundRect(5, 5, w - 10, 92, 22);
+  ctx.fillStyle = 'rgba(16,14,10,0.8)';
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(255,238,196,0.75)';
+  ctx.stroke();
+
+  // 尾巴（指向下方的小兵）
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - 14, 95);
+  ctx.lineTo(w / 2 + 14, 95);
+  ctx.lineTo(w / 2, 122);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(16,14,10,0.8)';
+  ctx.fill();
+
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff2d8';
+  ctx.fillText(text, w / 2, 52);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  entry = { tex, aspect: w / h };
+  _bubbleTextures.set(text, entry);
+  return entry;
+}
+
+export function makeSpeechBubble(text) {
+  const { tex, aspect } = bubbleTexture(text);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+  }));
+  const H = 1.05;
+  sp.scale.set(H * aspect, H, 1);
+  return sp;
+}
+
 // ---------- 武器 ----------
 function makeWeapon(type) {
   const g = new THREE.Group();

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
-import { makeSoldier, makeBoss, makeTitleLabel } from './models.js';
+import { makeSoldier, makeBoss, makeTitleLabel, makeSpeechBubble } from './models.js';
 
 // 敵人物件與生成管理 --------------------------------------------
+
+const MAX_SPEAKERS = 2;   // 同時說話（頭上有對話泡泡）的小兵上限
 
 let idCounter = 1;
 
@@ -195,6 +197,119 @@ export class EnemyManager {
     this.eliteTitles = sceneDef?.eliteTitles ? [...sceneDef.eliteTitles] : [];
     this.eliteChance = sceneDef?.eliteChance ?? 0.22;
     this.eliteCooldowns = [];   // { title, t }：持有者陣亡後，官銜冷卻中
+
+    // 小兵閒談：同時最多 MAX_SPEAKERS 位小兵頭上有對話泡泡
+    this.soldierQuotes = sceneDef?.soldierQuotes || [];
+    this.soldierDialogues = sceneDef?.soldierDialogues || [];
+    this.targetedQuotes = sceneDef?.targetedQuotes || [];
+    this.bossDownQuotes = sceneDef?.bossDownQuotes || [];
+    this.speakers = [];         // { enemy, sprite, t }
+    this.pendingReplies = [];   // { enemy, text, delay } 對話組的接話（延遲說出）
+    this.chatterTimer = 4;      // 下一次有人開口的倒數
+    this.targetShoutCd = 0;     // 被鎖定驚呼的節流（避免連點洗屏）
+  }
+
+  // 讓一隻小兵說話（頭上掛對話泡泡，duration 秒後收回）
+  saySoldier(enemy, text, duration = 3.2) {
+    const sprite = makeSpeechBubble(text);
+    sprite.position.y = enemy.title ? 5.05 : 4.15;   // 有稱號牌時泡泡再往上疊
+    enemy.mesh.add(sprite);
+    this.speakers.push({ enemy, sprite, t: duration });
+  }
+
+  // 尚未在說話的存活小兵
+  chatterPool() {
+    return this.enemies.filter(
+      (e) => !e.isBoss && !e.dead && !this.speakers.some((s) => s.enemy === e)
+    );
+  }
+
+  // 閒談排程：回收過期泡泡、處理接話，定時讓小兵獨白或兩人一問一答
+  updateChatter(dt) {
+    for (let i = this.speakers.length - 1; i >= 0; i--) {
+      const s = this.speakers[i];
+      s.t -= dt;
+      if (s.t <= 0 || s.enemy.dead || s.enemy.removed) {
+        s.enemy.mesh.remove(s.sprite);
+        this.speakers.splice(i, 1);
+        continue;
+      }
+      s.sprite.material.opacity = Math.min(1, s.t / 0.35);   // 收尾淡出
+    }
+
+    this.targetShoutCd = Math.max(0, this.targetShoutCd - dt);
+
+    // 對話組接話：時間到且對方還活著才回話
+    for (let i = this.pendingReplies.length - 1; i >= 0; i--) {
+      const r = this.pendingReplies[i];
+      r.delay -= dt;
+      if (r.delay > 0) continue;
+      this.pendingReplies.splice(i, 1);
+      if (!r.enemy.dead && !r.enemy.removed && this.speakers.length < MAX_SPEAKERS) {
+        this.saySoldier(r.enemy, r.text);
+      }
+    }
+
+    if (this.soldierQuotes.length === 0 && this.soldierDialogues.length === 0) return;
+    this.chatterTimer -= dt;
+    if (this.chatterTimer > 0) return;
+    this.chatterTimer = 3 + Math.random() * 5;
+
+    if (this.speakers.length >= MAX_SPEAKERS) return;   // 同時最多兩位
+    const pool = this.chatterPool();
+    if (pool.length === 0) return;
+
+    // 兩個位子都空且湊得出兩人 → 一半機率演一段一問一答
+    const canDialogue =
+      this.soldierDialogues.length > 0 &&
+      this.speakers.length === 0 &&
+      this.pendingReplies.length === 0 &&
+      pool.length >= 2;
+    if (canDialogue && Math.random() < 0.5) {
+      const pair = this.soldierDialogues[(Math.random() * this.soldierDialogues.length) | 0];
+      const a = pool.splice((Math.random() * pool.length) | 0, 1)[0];
+      // 接話者挑離提問者最近的，看起來像同伴交談
+      let b = pool[0];
+      let bestD = Infinity;
+      for (const e of pool) {
+        const d = e.mesh.position.distanceTo(a.mesh.position);
+        if (d < bestD) { bestD = d; b = e; }
+      }
+      this.saySoldier(a, pair[0]);
+      this.pendingReplies.push({ enemy: b, text: pair[1], delay: 1.0 + Math.random() * 0.5 });
+      return;
+    }
+
+    const e = pool[(Math.random() * pool.length) | 0];
+    this.saySoldier(e, this.soldierQuotes[(Math.random() * this.soldierQuotes.length) | 0]);
+  }
+
+  // 玩家點擊鎖定小兵 → 他有機率當場驚呼（帶入感），仍受兩人上限管制
+  shoutTargeted(enemy) {
+    if (this.targetedQuotes.length === 0) return;
+    if (enemy.isBoss || enemy.dead || enemy.removed) return;
+    if (this.targetShoutCd > 0) return;
+    if (this.speakers.length >= MAX_SPEAKERS) return;
+    if (this.speakers.some((s) => s.enemy === enemy)) return;
+    if (Math.random() < 0.35) return;   // 偶爾沉默，避免每次點擊都喊
+    this.targetShoutCd = 2.5;
+    this.saySoldier(enemy, this.targetedQuotes[(Math.random() * this.targetedQuotes.length) | 0], 2.6);
+  }
+
+  // 主將陣亡：清掉閒談與待回話，改由至多兩位小兵驚呼
+  panicOnBossDown() {
+    if (this.bossDownQuotes.length === 0) return;
+    for (const s of this.speakers) s.enemy.mesh.remove(s.sprite);
+    this.speakers.length = 0;
+    this.pendingReplies.length = 0;
+
+    const pool = this.enemies.filter((e) => !e.isBoss && !e.dead && !e.removed);
+    for (let i = 0; i < MAX_SPEAKERS && pool.length > 0; i++) {
+      const idx = (Math.random() * pool.length) | 0;
+      const e = pool.splice(idx, 1)[0];
+      this.saySoldier(e, this.bossDownQuotes[(Math.random() * this.bossDownQuotes.length) | 0], 3.6);
+    }
+    this.chatterTimer = 6 + Math.random() * 4;   // 驚呼後停一陣子再恢復閒談
   }
 
   // 新生小兵有機率取得一個尚未使用的官銜（頭上掛稱號牌）
@@ -228,6 +343,9 @@ export class EnemyManager {
   }
 
   update(dt, onBoss) {
+    // 小兵閒談泡泡
+    this.updateChatter(dt);
+
     // 官銜冷卻：期滿後放回可用池，之後的新小兵才可能再掛上
     for (let i = this.eliteCooldowns.length - 1; i >= 0; i--) {
       const c = this.eliteCooldowns[i];
@@ -273,11 +391,12 @@ export class EnemyManager {
     // 幾何體為共用快取，不可 dispose；僅從場景移除即可回收
     this.enemies.splice(index, 1);
 
-    // 鎮守 Boss 被斬殺 → 排定下次出關時間
+    // 鎮守 Boss 被斬殺 → 排定下次出關時間，小兵驚呼
     if (e === this.boss) {
       this.boss = null;
       const b = this.sceneDef.boss;
       this.bossTimer = b.respawnMin + Math.random() * (b.respawnMax - b.respawnMin);
+      this.panicOnBossDown();
     }
 
     // 官銜持有者陣亡 / 離場 → 官銜進入冷卻，暫時不會再出現

@@ -230,51 +230,57 @@ export class MeleeGeneral {
     this.mesh.rotation.y = this.facing;
     scene.add(this.mesh);
 
-    // 本機玩家識別光圈：半透明底環搭配兩層反向旋轉的亮弧。
+    // 本機玩家識別光圈：多層次「主角光環」——柔光暈 + 主環 + 掃光弧 +
+    // 一圈旋轉刻度虛線 + 內側反向細環。暖金色、有層次但不刺眼。
     this.haloTime = 0;
     this.halo = new THREE.Group();
-    this.halo.position.y = 0.07;            // 稍微離地，避免與地面閃爍
+    this.halo.position.y = 0.05;            // 稍微離地，避免與地面閃爍
     this.mesh.add(this.halo);
 
-    this.haloBaseMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffc94a,
-      transparent: true,
-      opacity: 0.28,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
+    const gold = 0xffd98a, brightGold = 0xfff0c0, amber = 0xffb85a;
+    const mkMat = (color, opacity) => new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const baseGeometry = new THREE.RingGeometry(1.42, 1.72, 64);
-    baseGeometry.rotateX(-Math.PI / 2);
-    this.halo.add(new THREE.Mesh(baseGeometry, this.haloBaseMaterial));
+    const mkRing = (inner, outer, mat, seg = 64, len) => {
+      const g = len != null
+        ? new THREE.RingGeometry(inner, outer, seg, 1, 0, len)
+        : new THREE.RingGeometry(inner, outer, seg);
+      g.rotateX(-Math.PI / 2);
+      return new THREE.Mesh(g, mat);
+    };
 
+    // 內側柔光暈（讓腳下有落地感而非懸浮）
+    this.haloGlowMaterial = mkMat(amber, 0.12);
+    this.halo.add(mkRing(0.2, 1.32, this.haloGlowMaterial, 48));
+
+    // 主環（明亮細環）
+    this.haloBaseMaterial = mkMat(gold, 0.5);
+    this.halo.add(mkRing(1.3, 1.42, this.haloBaseMaterial, 72));
+
+    // 外側細環（極淡，增添層次）
+    this.haloRimMaterial = mkMat(gold, 0.16);
+    this.halo.add(mkRing(1.74, 1.8, this.haloRimMaterial, 72));
+
+    // 掃光弧（兩道對稱長弧，順向旋轉）
     this.haloArcs = new THREE.Group();
-    this.haloArcMaterial = new THREE.MeshBasicMaterial({
-      color: 0xfff1a3,
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const arcGeometry = new THREE.RingGeometry(1.5, 1.84, 32, 1, 0, Math.PI * 0.38);
-    arcGeometry.rotateX(-Math.PI / 2);
-    for (let i = 0; i < 3; i++) {
-      const arc = new THREE.Mesh(arcGeometry, this.haloArcMaterial);
-      arc.rotation.y = (Math.PI * 2 * i) / 3;
+    this.haloArcMaterial = mkMat(brightGold, 0.7);
+    for (let i = 0; i < 2; i++) {
+      const arc = mkRing(1.44, 1.66, this.haloArcMaterial, 48, Math.PI * 0.42);
+      arc.rotation.y = Math.PI * i;
       this.haloArcs.add(arc);
     }
     this.halo.add(this.haloArcs);
 
-    this.haloOuterArcs = new THREE.Group();
-    const outerArcGeometry = new THREE.RingGeometry(1.9, 2.02, 32, 1, 0, Math.PI * 0.26);
-    outerArcGeometry.rotateX(-Math.PI / 2);
-    for (let i = 0; i < 4; i++) {
-      const arc = new THREE.Mesh(outerArcGeometry, this.haloArcMaterial);
-      arc.rotation.y = (Math.PI * i) / 2;
-      this.haloOuterArcs.add(arc);
+    // 內側反向細環（逆向旋轉，做出雙環交錯感）
+    this.haloInner = new THREE.Group();
+    this.haloInnerMaterial = mkMat(brightGold, 0.4);
+    for (let i = 0; i < 3; i++) {
+      const arc = mkRing(1.04, 1.14, this.haloInnerMaterial, 40, Math.PI * 0.34);
+      arc.rotation.y = (Math.PI * 2 * i) / 3;
+      this.haloInner.add(arc);
     }
-    this.halo.add(this.haloOuterArcs);
+    this.halo.add(this.haloInner);
 
     this.character = CHARACTERS.lubu;   // 目前操控的武將角色（可切換 FBX 模型）
     this.mixer = null;
@@ -304,27 +310,27 @@ export class MeleeGeneral {
     this.dust = [];
     this.dustTimer = 0;
 
-    // 鎖定目標的地面紅圈（細底環 + 兩段旋轉亮弧）
+    // 鎖定目標的地面紅圈（細底環 + 兩段旋轉亮弧，較先前更細更收斂）
     this.targetRingMat = new THREE.MeshBasicMaterial({
-      color: 0xff4d3a,
+      color: 0xff5a44,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.5,
       side: THREE.DoubleSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     this.targetRing = new THREE.Group();
-    const ringBaseGeo = new THREE.RingGeometry(1.0, 1.1, 48);
+    const ringBaseGeo = new THREE.RingGeometry(1.02, 1.12, 56);
     ringBaseGeo.rotateX(-Math.PI / 2);
     this.targetRing.add(new THREE.Mesh(ringBaseGeo, this.targetRingMat));
-    const ringArcGeo = new THREE.RingGeometry(1.18, 1.38, 32, 1, 0, Math.PI * 0.55);
+    const ringArcGeo = new THREE.RingGeometry(1.16, 1.28, 40, 1, 0, Math.PI * 0.5);
     ringArcGeo.rotateX(-Math.PI / 2);
     for (let i = 0; i < 2; i++) {
       const arc = new THREE.Mesh(ringArcGeo, this.targetRingMat);
       arc.rotation.y = Math.PI * i;
       this.targetRing.add(arc);
     }
-    this.targetRing.position.y = 0.06;
+    this.targetRing.position.y = 0.05;
     this.targetRing.visible = false;
     scene.add(this.targetRing);
 
@@ -433,6 +439,8 @@ export class MeleeGeneral {
     if (!enemy || enemy.dead || enemy.removed) return;
     this.selected = enemy;
     this.target = enemy;
+    // 被鎖定的小兵有機率驚呼（帶入感）
+    if (this.enemyMgr.shoutTargeted) this.enemyMgr.shoutTargeted(enemy);
   }
 
   // 點擊空地：取消鎖定（非自動模式下武將會走回原位）
@@ -557,10 +565,10 @@ export class MeleeGeneral {
       return;
     }
     this.targetRing.visible = true;
-    this.targetRing.position.set(t.mesh.position.x, 0.06, t.mesh.position.z);
-    this.targetRing.rotation.y += dt * 2.6;
+    this.targetRing.position.set(t.mesh.position.x, 0.05, t.mesh.position.z);
+    this.targetRing.rotation.y += dt * 2.0;
     this.targetRing.scale.setScalar(Math.max(1, t.radius));
-    this.targetRingMat.opacity = 0.5 + (Math.sin(this.haloTime * 6) + 1) * 0.2;
+    this.targetRingMat.opacity = 0.4 + (Math.sin(this.haloTime * 4) + 1) * 0.12;
   }
 
   // 觸發一次揮刀動作（普通攻擊隨機挑選，或每 ULT_EVERY 次施放大絕招）
@@ -586,11 +594,12 @@ export class MeleeGeneral {
   update(dt, cmd) {
     if (this.mixer) this.mixer.update(dt);
     this.haloTime += dt;
-    this.haloArcs.rotation.y += dt * 2.2;
-    this.haloOuterArcs.rotation.y -= dt * 1.35;
-    const pulse = (Math.sin(this.haloTime * 4) + 1) * 0.5;
-    this.haloBaseMaterial.opacity = 0.2 + pulse * 0.12;
-    this.haloArcMaterial.opacity = 0.72 + pulse * 0.2;
+    this.haloArcs.rotation.y += dt * 1.5;    // 掃光弧順向
+    this.haloInner.rotation.y -= dt * 1.1;   // 內環逆向
+    const pulse = (Math.sin(this.haloTime * 2.4) + 1) * 0.5;
+    this.haloBaseMaterial.opacity = 0.4 + pulse * 0.14;
+    this.haloArcMaterial.opacity = 0.55 + pulse * 0.22;
+    this.haloInnerMaterial.opacity = 0.32 + pulse * 0.14;
     if (!this.ready) return;            // 模型尚未載入
 
     this.holdTimer = Math.max(0, this.holdTimer - dt);
