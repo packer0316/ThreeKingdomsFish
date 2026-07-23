@@ -10,7 +10,10 @@
       "PowerShell($conns = Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Write-Output \"killed leftover vite on 5199\" } else { Write-Output \"port 5199 clean\" })",
       "PowerShell($conns = Get-NetTCPConnection -LocalPort 5299 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Write-Output \"killed leftover on 5299\" } else { Write-Output \"port 5299 clean\" })",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "WebSearch",
+      "WebFetch(domain:kongming.net)",
+      "WebFetch(domain:www.gamersky.com)"
     ]
   }
 }
