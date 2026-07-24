@@ -168,7 +168,6 @@ function summonDealDamage(enemy, power, hitPos) {
   spawnSpark(hitPos);
   const killed = enemy.hit(power);
   if (!killed) return false;
-  enemy.dead = true;
   const reward = Math.floor(ui.bet * enemy.value);
   state.coins += reward;
   ui.refresh();
@@ -176,7 +175,7 @@ function summonDealDamage(enemy, power, hitPos) {
   ui.floatCoin(s.x, s.y, reward);
   burstCoins(enemy.mesh.position.clone());
   if (enemy.isBoss) handleBossDeath(enemy, reward, '招募援軍', false);
-  enemyMgr.removeEnemy(enemy);
+  enemyMgr.killEnemy(enemy);
   return true;
 }
 
@@ -331,7 +330,6 @@ function attemptSlash(enemy) {
   const power = 1 + Math.floor(ui.betIndex / 2); // 下注越高、刀傷越高
   const killed = enemy.hit(power);
   if (killed) {
-    enemy.dead = true;
     const reward = Math.floor(bet * enemy.value);
     state.coins += reward;
     ui.refresh();
@@ -340,7 +338,7 @@ function attemptSlash(enemy) {
     ui.floatCoin(s.x, s.y, reward);
     burstCoins(enemy.mesh.position.clone());
     if (enemy.isBoss) handleBossDeath(enemy, reward, '你（中座）', true);
-    enemyMgr.removeEnemy(enemy);
+    enemyMgr.killEnemy(enemy);   // 小兵播擊倒動作後移除；Boss 立即移除
   }
   return true;
 }
@@ -351,7 +349,6 @@ function onHit(enemy, bullet, hitPos) {
   const killed = enemy.hit(bullet.power);
   if (!killed) return;
 
-  enemy.dead = true;
   const owner = bullet.owner;                 // AI 玩家；null = 中座真人
   const bet = owner ? owner.bet : ui.bet;
   const reward = Math.floor(bet * enemy.value);
@@ -369,7 +366,7 @@ function onHit(enemy, bullet, hitPos) {
 
   // 鎮守 Boss 陣亡：byPlayer = 最後一擊是否為中座玩家（owner 為 null 時是玩家）
   if (enemy.isBoss) handleBossDeath(enemy, reward, owner ? owner.def.name : '你（中座）', !owner);
-  enemyMgr.removeEnemy(enemy);
+  enemyMgr.killEnemy(enemy);
 }
 
 // Boss 陣亡統一處理：只有「本人」擊殺且該 Boss 有開獎表演時才進表演；

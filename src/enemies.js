@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
 import { makeSoldier, makeBoss, makeTitleLabel, makeSpeechBubble } from './models.js';
+import { spawnSoldier } from './soldierModel.js';
 
 // 敵人物件與生成管理 --------------------------------------------
 
@@ -27,10 +28,32 @@ export class Enemy {
     this.removed = false;   // 已離場（走出邊界或被擊殺移除）
     this.title = null;      // 官銜（菁英小兵，由 EnemyManager 指派）
 
-    this.mesh = isBoss ? makeBoss(def) : makeSoldier(def);
+    // 動畫狀態（一般小兵使用 FBX + AnimationMixer；Boss 仍為程序化模型）
+    this.mixer = null;
+    this.actions = {};
+    this.dying = false;      // 播放擊倒動作中（播完才真正移除）
+    this.deathT = 0;
+
+    if (isBoss) {
+      this.mesh = makeBoss(def);
+    } else {
+      // 小兵改用共用 FBX 模型：先放空群組佔位，載好後掛入並播放 Walking
+      this.mesh = new THREE.Group();
+      spawnSoldier((inst) => {
+        if (this.removed) return;
+        this.mesh.add(inst.model);
+        this.mixer = inst.mixer;
+        this.actions = inst.actions;
+        if (this.dead) { this.playKnockdown(); }   // 尚未載好就先被打死 → 直接播擊倒
+        else if (this.actions.walk) {
+          const a = this.actions.walk;
+          a.reset(); a.setLoop(THREE.LoopRepeat, Infinity);
+          a.time = Math.random() * (a.getClip().duration || 1);   // 錯開步伐避免整齊劃一
+          a.play();
+        }
+      });
+    }
     this.mesh.userData.enemy = this;   // 供點擊射線反查敵人物件
-    // 小兵數量多，關閉投影以省下每幀陰影 pass 的大量幾何體
-    if (!isBoss) this.mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
 
     // 從左或右邊界進場，橫向行軍
     this.dir = opts.dir != null ? opts.dir : (Math.random() < 0.5 ? 1 : -1);
@@ -63,6 +86,15 @@ export class Enemy {
   }
 
   update(dt) {
+    if (this.mixer) this.mixer.update(dt);
+
+    // 擊倒中：只播動作、不移動；播完（含緩衝）才回報移除
+    if (this.dying) {
+      this.deathT -= dt;
+      return this.deathT > 0;
+    }
+    if (this.dead) return false;   // 已死但無擊倒動作 → 直接移除
+
     // 速度忽快忽慢 → 走得不規則
     this.speedWobble += dt;
     const spd = this.speed * (0.7 + 0.4 * Math.sin(this.speedWobble * 1.4));
@@ -74,16 +106,25 @@ export class Enemy {
 
     this.walkPhase += dt * (0.6 + Math.abs(spd)) * 5;
 
-    // 走路擺動
-    const parts = this.mesh.userData.parts;
-    if (parts) {
-      const s = Math.sin(this.walkPhase) * 0.5;
-      parts.legL.rotation.x = s;
-      parts.legR.rotation.x = -s;
-      parts.armR.rotation.x = -0.5 - s * 0.4;
+    // 面向實際行進方向（含蛇行轉彎時平滑轉身）
+    const vx = this.dir * spd * 1.8;
+    const vz = Math.cos(this.wanderPhase) * this.wanderAmp * this.wanderSpeed;
+    const targetYaw = Math.atan2(vx, vz);
+    let dYaw = targetYaw - this.mesh.rotation.y;
+    dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
+    this.mesh.rotation.y += dYaw * Math.min(1, dt * 8);
+
+    // 未載入 FBX 前的程序化走路擺動備援（載好後由動畫接手）
+    if (!this.mixer) {
+      const parts = this.mesh.userData.parts;
+      if (parts) {
+        const s = Math.sin(this.walkPhase) * 0.5;
+        parts.legL.rotation.x = s;
+        parts.legR.rotation.x = -s;
+        parts.armR.rotation.x = -0.5 - s * 0.4;
+      }
+      this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.06;
     }
-    // 輕微上下浮動
-    this.mesh.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.06;
 
     // 走出畫面 → 回收
     if (this.dir === 1 && this.mesh.position.x > FIELD.maxX + 3) return false;
@@ -97,6 +138,30 @@ export class Enemy {
     this.flash();     // 受擊閃紅
     const chance = this.killChance * (1 + (power - 1) * 0.15);
     return Math.random() < chance;
+  }
+
+  // 被擊殺：標記死亡並播放擊倒動作，動作結束後由 update 回報移除
+  beginDeath() {
+    if (this.dead) return;
+    this.dead = true;
+    if (this.mixer && this.actions.knock) {
+      this.playKnockdown();
+    } else {
+      this.dying = false;   // 尚無動畫（模型未載好）→ 下一幀直接移除
+    }
+  }
+
+  playKnockdown() {
+    const a = this.actions.knock;
+    if (!a) { this.dying = false; return; }
+    this.dying = true;
+    if (this.actions.walk) this.actions.walk.fadeOut(0.12);
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;   // 停在最後一格（倒地不彈回）
+    a.fadeIn(0.08);
+    a.play();
+    this.deathT = (a.getClip().duration || 1) + 0.15;
   }
 
   flash() {
@@ -401,13 +466,20 @@ export class EnemyManager {
       }
     }
 
-    // 更新並回收
+    // 更新並回收（死亡的小兵會先播完擊倒動作，update 回報 false 才移除）
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
-      if (e.dead || !e.update(dt)) {
+      if (!e.update(dt)) {
         this.remove(i);
       }
     }
+  }
+
+  // 擊殺敵人：Boss 立即移除（沿用開獎/重生流程）；小兵先播擊倒動作再移除
+  killEnemy(enemy) {
+    if (!enemy || enemy.removed) return;
+    if (enemy.isBoss) { this.removeEnemy(enemy); return; }
+    enemy.beginDeath();
   }
 
   remove(index) {
@@ -441,6 +513,7 @@ export class EnemyManager {
   nearest(point) {
     let best = null, bestD = Infinity;
     for (const e of this.enemies) {
+      if (e.dead || e.removed) continue;   // 略過陣亡/擊倒中的敵人
       const d = e.mesh.position.distanceTo(point);
       if (d < bestD) { bestD = d; best = e; }
     }
