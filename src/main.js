@@ -154,7 +154,8 @@ charBtns.forEach((btn) => {
 
 // ---------- 招募援軍：出現在座位兩側自動作戰（腳底紫圈）----------
 // 招募時間（小時）× 每小時秒數 = 援軍在場作戰的真實秒數。
-const SUMMON_SEC_PER_HOUR = 5;   // 6h → 30s，24h → 120s
+// 真實時間：1 小時 = 3600 秒 → 6h = 6 小時、24h = 24 小時。
+const SUMMON_SEC_PER_HOUR = 3600;
 const summons = new SummonManager(scene, enemyMgr, {
   dealDamage: summonDealDamage,
   getPlayerX: () => SEAT_X[roomSelect.currentSeat],
