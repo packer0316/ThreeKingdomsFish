@@ -13,6 +13,7 @@ import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { HitFX } from './hitfx.js';
 import { CHARACTERS } from './characters.js';
 import { DevPanel } from './dev.js';
+import { startBgm } from './audio.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
@@ -519,6 +520,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
   document.getElementById('intro').classList.add('hidden');
   running = true;
   clock.getDelta();
+  startBgm();            // 使用者手勢：開始播放背景音樂（循環）
   showSceneBanner();
 });
 
