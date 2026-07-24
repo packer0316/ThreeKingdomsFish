@@ -279,6 +279,7 @@ export class BossEnemy extends Enemy {
     a.setLoop(THREE.LoopRepeat, Infinity);
     a.enabled = true;
     a.setEffectiveWeight(1);
+    a.setEffectiveTimeScale(0.6);   // 走路動作放慢為 0.6 倍速（華雄 / 曹操）
     a.fadeIn(0.2);
     a.play();
   }

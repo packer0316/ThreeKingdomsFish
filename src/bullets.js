@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeProjectile } from './models.js';
+import { makeProjectile } from './arrowModel.js';
 
 // 砲彈 / 箭矢管理 -----------------------------------------------
 
