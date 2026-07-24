@@ -159,6 +159,7 @@ const STRIP_LEN = 32;             // 輪帶總格數
 const TARGET_INDEX = 27;          // 中獎格落點（保留足夠滑行距離）
 const SPIN_MIN = 3;               // 輪帶轉動最短秒數（與招募時長無關，僅演出）
 const SPIN_MAX = 6;               // 越久的招募轉得越久，較有戲
+const REGO_DISCOUNT = 0.6;        // 重新招募（替換現有援軍）：原價打 6 折
 
 export class Recruit {
   // state: { coins }；onResult(character) 可選：招募成功後回呼（主程式接手）
@@ -201,11 +202,11 @@ export class Recruit {
     this.el.modal.addEventListener('click', (e) => {
       if (e.target === this.el.modal) this.close();
     });
-    this.el.go.addEventListener('click', () => this.spin());
-    this.el.rego.addEventListener('click', () => this.spin());
+    this.el.go.addEventListener('click', () => this.spin(false));
+    this.el.rego.addEventListener('click', () => this.spin(true));
     this.el.fx.addEventListener('click', () => this.hideFx());
     // 花費 / 時間 變動 → 即時更新顯示機率
-    this.el.cost.addEventListener('input', () => this.renderRates());
+    this.el.cost.addEventListener('input', () => { this.renderRates(); this.updateRego(); });
     this.el.time.addEventListener('input', () => this.renderRates());
   }
 
@@ -273,10 +274,21 @@ export class Recruit {
     this.el.coins.textContent = Math.floor(this.state.coins).toLocaleString('en-US');
   }
 
-  // 有援軍在場 → 顯示「重新招募」；否則只顯示「開始招募」
+  // 有援軍在場 → 只能「重新招募」（原價打 6 折），停用「開始招募」；
+  // 沒有援軍 → 只能「開始招募」，隱藏「重新招募」
   updateRego() {
     const active = !!(this.isSummonActive && this.isSummonActive());
     this.el.rego.classList.toggle('hidden', !active);
+    // 已有援軍時停用開始招募（避免直接新招）
+    this.el.go.disabled = active;
+
+    // 重新招募按鈕上顯示折後價
+    if (active) {
+      const { cost } = this.currentParams();
+      const regoCost = Math.floor(cost * REGO_DISCOUNT);
+      this.el.rego.textContent =
+        `重新招募（替換現有援軍）－ ${regoCost.toLocaleString('en-US')} 籌碼（6 折）`;
+    }
   }
 
   // 初始輪帶：兩排都填滿隨機頭像（尚未轉動）
@@ -301,12 +313,21 @@ export class Recruit {
     return cell;
   }
 
-  spin() {
+  // rego = true：重新招募（替換現有援軍），花費打 6 折
+  spin(rego = false) {
     if (this.spinning) return;
-    const cost = clamp(Math.floor(Number(this.el.cost.value) || 0), COST_MIN, COST_MAX);
+
+    const active = !!(this.isSummonActive && this.isSummonActive());
+    // 已有援軍時不允許直接「開始招募」，只能重新招募
+    if (active && !rego) return;
+
+    const baseCost = clamp(Math.floor(Number(this.el.cost.value) || 0), COST_MIN, COST_MAX);
     const hours = clamp(Math.floor(Number(this.el.time.value) || TIME_MIN), TIME_MIN, TIME_MAX);
-    this.el.cost.value = cost;
+    this.el.cost.value = baseCost;
     this.el.time.value = hours;
+
+    // 重新招募：實際扣款為原價 6 折
+    const cost = rego ? Math.floor(baseCost * REGO_DISCOUNT) : baseCost;
 
     if (this.state.coins < cost) {
       this.el.result.className = 'recruit-result warn';
@@ -326,7 +347,7 @@ export class Recruit {
     this.el.result.textContent = '招募中…';
 
     // 一次抽兩名（不重複），分別放到上下兩排輪帶
-    const chosen = pickTwo(cost, hours);
+    const chosen = pickTwo(baseCost, hours);   // 機率依原價，折扣只影響花費
     const tf = clamp((hours - TIME_MIN) / (TIME_MAX - TIME_MIN), 0, 1);
     const spinSec = SPIN_MIN + tf * (SPIN_MAX - SPIN_MIN);
 

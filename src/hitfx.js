@@ -224,6 +224,11 @@ export class HitFX {
     for (const s of systems) {
       s.emitter.position.copy(pos);
       s.emitter.scale.setScalar(scale);
+      // 立刻更新世界矩陣：粒子在 time=0 就以爆發(burst)噴出，而 three.quarks
+      // 於發射當下讀取 emitter.matrixWorld；此矩陣平時只在 renderer.render() 時刷新。
+      // 本幀的噴發早於 render，若不手動更新，會沿用上次 render 的舊座標——
+      // 物件池輪替後即為「~24 發前那一格的位置」，玩久了特效就飄到非命中處。
+      s.emitter.updateMatrixWorld(true);
       s.restart();
       s.play();
     }

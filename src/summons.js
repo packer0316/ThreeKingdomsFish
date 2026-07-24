@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeSummonGeneral } from './models.js';
+import { makeSummonGeneral, makeNameLabel } from './models.js';
+import { RARITY } from './recruit.js';
 
 // 招募武將（召喚援軍）------------------------------------------------
 // 招募到「法/書/騎/槍/劍」的武將時，兩名援軍出現在玩家座位兩側，
@@ -179,6 +180,12 @@ class SummonUnit {
     this.ring = makeSummonRing();
     this.ring.position.y = 0.05;
     this.mesh.add(this.ring);
+
+    // 頭頂名牌：顯示武將名字，顏色對應稀有度（騎兵較高，名牌跟著抬高）
+    const nameColor = (RARITY[character.rarity] || RARITY.H).color;
+    this.nameLabel = makeNameLabel(character.name, nameColor);
+    this.nameLabel.position.y = (this.type === '騎' ? 5.4 : 3.9);
+    this.mesh.add(this.nameLabel);
 
     this.parts = this.mesh.userData.parts;
     this.armRBase = this.mesh.userData.armRBase ?? -0.5;

@@ -176,6 +176,66 @@ export function makeTitleLabel(text) {
   return sp;
 }
 
+// ---------- 武將名牌（招募援軍頭上顯示）----------
+// 風格比照鎮守 Boss 頭上名牌（.boss-plate-name）：無底板純文字，
+// 帶字距與同色光暈；文字顏色對應武將稀有度。同名同色共用貼圖。
+const _nameTextures = new Map();
+function nameTexture(text, color) {
+  const key = `${text}|${color}`;
+  let entry = _nameTextures.get(key);
+  if (entry) return entry;
+
+  const font = '900 60px "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+  const spacing = 14;
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = font;
+  measure.letterSpacing = `${spacing}px`;
+  const textW = measure.measureText(text).width;
+
+  const w = Math.ceil(textW + 60);   // 兩側留空給光暈
+  const h = 96;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+
+  ctx.font = font;
+  ctx.letterSpacing = `${spacing}px`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const cx = w / 2 + spacing / 2;    // letterSpacing 會在字尾多留一格，置中補回
+
+  // 底層黑影 → 同色光暈 → 本體，仿 text-shadow 疊層
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = color;
+  ctx.fillText(text, cx, h / 2 + 3);
+  ctx.shadowOffsetY = 0;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.fillText(text, cx, h / 2 + 3);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  entry = { tex, aspect: w / h };
+  _nameTextures.set(key, entry);
+  return entry;
+}
+
+export function makeNameLabel(text, color = '#eaeef7') {
+  const { tex, aspect } = nameTexture(text, color);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+  }));
+  const H = 0.42;
+  sp.scale.set(H * aspect, H, 1);
+  return sp;
+}
+
 // ---------- 小兵對話泡泡（閒談台詞）----------
 // 寬度依字數自適應，底部帶指向小兵的尾巴；同一句台詞共用貼圖。
 const _bubbleTextures = new Map();
