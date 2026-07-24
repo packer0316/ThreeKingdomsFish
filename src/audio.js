@@ -34,3 +34,45 @@ export function toggleBgm() {
   else bgm.pause();
   return !bgm.paused;
 }
+
+// 音效（SFX）------------------------------------------------
+// 黃忠弓箭命中小兵的音效。以小型物件池輪替，支援短時間內連續命中重疊播放。
+const ARROW_HIT_URL = BASE + 'mp3/sound/arrowHit.mp3';
+const ARROW_HIT_POOL_SIZE = 6;
+const arrowHitPool = [];
+let arrowHitNext = 0;
+for (let i = 0; i < ARROW_HIT_POOL_SIZE; i++) {
+  const a = new Audio(encodeURI(ARROW_HIT_URL));
+  a.volume = 0.6;
+  a.preload = 'auto';
+  arrowHitPool.push(a);
+}
+
+export function playArrowHit() {
+  const a = arrowHitPool[arrowHitNext];
+  arrowHitNext = (arrowHitNext + 1) % ARROW_HIT_POOL_SIZE;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
+
+// 曹操登場（BossComing）音效：整段開場只播放一次
+const CAOCAO_COMING_URL = BASE + 'mp3/sound/tsaotsaoBossComing.mp3';
+const caocaoComing = new Audio(encodeURI(CAOCAO_COMING_URL));
+caocaoComing.volume = 0.8;
+caocaoComing.preload = 'auto';
+
+export function playCaocaoComing() {
+  caocaoComing.currentTime = 0;
+  caocaoComing.play().catch(() => {});
+}
+
+// 華雄登場（BossComing）音效：整段開場只播放一次
+const HUAXIONG_COMING_URL = BASE + 'mp3/sound/huaShongBossComing.mp3';
+const huaxiongComing = new Audio(encodeURI(HUAXIONG_COMING_URL));
+huaxiongComing.volume = 0.8;
+huaxiongComing.preload = 'auto';
+
+export function playHuaxiongComing() {
+  huaxiongComing.currentTime = 0;
+  huaxiongComing.play().catch(() => {});
+}

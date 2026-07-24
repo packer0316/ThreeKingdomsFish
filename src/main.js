@@ -11,9 +11,10 @@ import { BossShow, hasBossShow } from './bossshow.js';
 import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { HitFX } from './hitfx.js';
+import { initSkillFX, updateSkillFX } from './skillfx.js';
 import { CHARACTERS } from './characters.js';
 import { DevPanel } from './dev.js';
-import { startBgm } from './audio.js';
+import { startBgm, playArrowHit } from './audio.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
@@ -51,6 +52,7 @@ const ui = new UI(state);
 const enemyMgr = new EnemyManager(scene, currentScene);
 const bulletMgr = new BulletManager(scene);
 const hitFX = new HitFX(scene);   // 擊中粒子特效（three.quarks 物件池）
+initSkillFX(scene);               // 技能粒子特效（大招 / 援軍法術）
 
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
 const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
@@ -356,6 +358,10 @@ function attemptSlash(enemy) {
 // ---------- 命中處理（左右 AI 遠程砲彈）----------
 function onHit(enemy, bullet, hitPos) {
   hitFX.spawn(hitPos);
+  // 本人操控黃忠（弓將）時，自己的弓箭命中任何怪（大中小兵、Boss）都播放命中音效
+  if (activeCharType === 'archer' && !bullet.owner) {
+    playArrowHit();
+  }
   const killed = enemy.hit(bullet.power);
   if (!killed) return;
 
@@ -427,6 +433,7 @@ function clearEffects() {
 
 function updateEffects(dt) {
   hitFX.update(dt);
+  updateSkillFX(dt);
   for (let i = coins.length - 1; i >= 0; i--) {
     const c = coins[i];
     c.mesh.position.addScaledVector(c.v, dt);

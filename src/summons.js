@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeSummonGeneral, makeNameLabel } from './models.js';
 import { RARITY } from './recruit.js';
+import { TornadoFX, LightningFX } from './skillfx.js';
 
 // 招募武將（召喚援軍）------------------------------------------------
 // 招募到「法/書/騎/槍/劍」的武將時，兩名援軍出現在玩家座位兩側，
@@ -56,108 +57,70 @@ function makeSummonRing() {
   return grp;
 }
 
-// ---------- 法術特效：龍捲風（法）----------
-// 從施術者朝目標直線飛行的旋轉風柱，命中敵人造成傷害後消散。
+// ---------- 法術特效：龍捲風（法，quarks 粒子）----------
+// 從施術者朝目標直線飛行的旋風柱（粒子旋繞上升，整柱跟著平移），
+// 命中敵人造成傷害後停止發射，讓殘餘粒子飄散完再回收。
 const TORNADO_LIFE = 2.0;
 class Tornado {
   constructor(scene, from, dir, power, dealDamage) {
-    this.scene = scene;
     this.dir = dir.clone().setY(0).normalize();
     this.power = power;
     this.dealDamage = dealDamage;
     this.speed = 20;
     this.life = TORNADO_LIFE;
-    this.spin = 0;
-
-    this.group = new THREE.Group();
-    this.group.position.copy(from).setY(0.1);
-    this.rings = [];
-    for (let i = 0; i < 5; i++) {
-      const r = 0.3 + i * 0.28;
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0xcabfff, transparent: true, opacity: 0.5,
-        side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
-      });
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.09, 6, 18), mat);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.4 + i * 0.85;
-      this.group.add(ring);
-      this.rings.push(ring);
-    }
-    scene.add(this.group);
+    this.fade = 0;   // 消散殘留秒數（>0 表示已停止發射）
+    this.fx = new TornadoFX(from.clone().setY(0.05));
   }
 
   update(dt, enemies) {
-    this.life -= dt;
-    this.spin += dt * 14;
-    this.group.position.addScaledVector(this.dir, this.speed * dt);
-    this.group.rotation.y = this.spin;
-    for (let i = 0; i < this.rings.length; i++) {
-      this.rings[i].rotation.z = this.spin * (1 + i * 0.2);
+    if (this.fade > 0) {
+      this.fade -= dt;
+      return this.fade > 0;
     }
 
+    this.life -= dt;
+    this.fx.root.position.addScaledVector(this.dir, this.speed * dt);
+
     // 命中最近的敵人（水平距離）
-    const p = this.group.position;
+    const p = this.fx.root.position;
     for (const e of enemies) {
       if (e.dead || e.removed) continue;
       const dx = e.mesh.position.x - p.x;
       const dz = e.mesh.position.z - p.z;
       if (dx * dx + dz * dz < (e.radius + 1.0) * (e.radius + 1.0)) {
         this.dealDamage(e, this.power, e.mesh.position.clone().setY(1.6));
-        this.life = Math.min(this.life, 0.12);   // 命中後迅速消散
+        this.life = 0;   // 命中後開始消散
         break;
       }
     }
-    return this.life > 0;
+    if (this.life <= 0) {
+      this.fx.endEmit();
+      this.fade = 0.5;   // 殘餘粒子最長壽命 0.8s，留 0.5s 淡出已足夠
+    }
+    return true;
   }
 
-  dispose() { this.scene.remove(this.group); }
+  dispose() { this.fx.dispose(); }
 }
 
-// ---------- 法術特效：雷電（書）----------
-// 瞬發：在目標頭上劈下閃電，立即造成傷害，光柱短暫閃現後消失。
-const BOLT_LIFE = 0.32;
+// ---------- 法術特效：雷電（書，quarks 粒子）----------
+// 瞬發：在目標頭上劈下拉伸光束雷擊，立即造成傷害，
+// 閃光/電花/衝擊環演完即回收。
+const BOLT_LIFE = 0.75;
 class Lightning {
   constructor(scene, target, power, dealDamage) {
-    this.scene = scene;
     this.life = BOLT_LIFE;
-
     const pos = target.mesh.position.clone();
     dealDamage(target, power, pos.clone().setY(1.6));   // 瞬間傷害
-
-    this.group = new THREE.Group();
-    this.group.position.set(pos.x, 0, pos.z);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xbfe8ff, transparent: true, opacity: 0.95,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    });
-    // 鋸齒狀分段光柱
-    let y = 7.5;
-    let x = 0, z = 0;
-    for (let i = 0; i < 6; i++) {
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.3, 5), mat);
-      const nx = (Math.random() - 0.5) * 0.6;
-      const nz = (Math.random() - 0.5) * 0.6;
-      seg.position.set((x + nx) / 2, y - 0.65, (z + nz) / 2);
-      seg.rotation.z = (nx - x) * 0.5;
-      seg.rotation.x = (nz - z) * 0.5;
-      this.group.add(seg);
-      x = nx; z = nz; y -= 1.25;
-    }
-    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), mat);
-    flash.position.y = 1.4;
-    this.group.add(flash);
-    scene.add(this.group);
+    this.fx = new LightningFX(pos.x, pos.z);
   }
 
   update(dt) {
     this.life -= dt;
-    const k = Math.max(0, this.life / BOLT_LIFE);
-    this.group.traverse((o) => { if (o.material) o.material.opacity = 0.95 * k; });
     return this.life > 0;
   }
 
-  dispose() { this.scene.remove(this.group); }
+  dispose() { this.fx.dispose(); }
 }
 
 // ---------- 單一召喚武將 ----------

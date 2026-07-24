@@ -2,6 +2,8 @@
 // 當守關大將出關時，先壓黑全屏、劈入一張角色大圖（zoom + 撞擊閃光 +
 // 螢幕震動 + 上下電影黑邊），停留數秒後淡出，再交還戰鬥。
 
+import { playCaocaoComing, playHuaxiongComing } from './audio.js';
+
 const BOSS_COMING_IMG = {
   huaxiong: 'textures/bossComing/huashongBossComing.png',
   caocao: 'textures/bossComing/tsaotsaoBossComing.png',
@@ -42,6 +44,10 @@ export class BossComing {
     w.classList.remove('hidden', 'show', 'out');
     void w.offsetWidth;                 // 重排，讓動畫從頭播放
     w.classList.add('show');
+
+    // 守將登場：整段開場播放一次專屬音效
+    if (bossId === 'caocao') playCaocaoComing();
+    else if (bossId === 'huaxiong') playHuaxiongComing();
 
     // 撞擊瞬間：閃光（CSS）+ 螢幕震動
     this._timers.push(setTimeout(() => {

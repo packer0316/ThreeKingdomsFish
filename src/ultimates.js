@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { randomSword } from './swordModels.js';
+import { BladeStormFX, RedStormFX } from './skillfx.js';
 
 // 玩家武將大招（每次攻擊約 5% 機率觸發）------------------------------
 // 全部為「全場範圍技」：對場上所有小兵各造成一次（多波）機率性擊殺，
 // 沿用一般命中的擊殺率（透過傳入的 dealDamage 結算獎勵）。
-//   呂布「千軍萬馬」：萬劍從天而降插地，螢幕震動後淡出
-//   關羽「偃月橫掃」：如陀螺般刀風向外橫掃整個戰場
+//   呂布「千軍萬馬」：萬劍從天而降插地＋滿場紅色粒子噴發
+//   關羽「偃月橫掃」：分層螺旋刀風向外橫掃整個戰場
 //   黃忠「萬箭齊發」：箭雨持續 5 秒不斷落下
+// 刀風 / 紅粒子視覺層為 three.quarks 粒子（見 skillfx.js）。
 
 // ---------- 呂布：千軍萬馬（天降萬劍）----------
 class SkySwords {
@@ -81,69 +83,42 @@ class SkySwords {
   }
 }
 
-// ---------- 關羽：偃月橫掃（陀螺刀風）----------
+// ---------- 關羽：偃月橫掃（螺旋刀風，quarks 粒子）----------
 class Whirlwind {
   constructor(scene, center, aoe) {
-    this.scene = scene;
     this.aoe = aoe;
     this.time = 0;
-    this.life = 1.4;
-    this.maxR = 28;
-
-    this.group = new THREE.Group();
-    this.group.position.set(center.x, 0.25, center.z);
-    scene.add(this.group);
-
-    this.ringMat = new THREE.MeshBasicMaterial({
-      color: 0x8fe8a4, transparent: true, opacity: 0.85,
-      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
-    });
-    this.rings = [];
-    for (let i = 0; i < 3; i++) {
-      const g = new THREE.RingGeometry(1.0, 1.5, 56); g.rotateX(-Math.PI / 2);
-      const m = new THREE.Mesh(g, this.ringMat);
-      this.group.add(m);
-      this.rings.push({ m, geo: g, delay: i * 0.16 });
-    }
-
-    // 旋轉刀風弧（陀螺感）
-    this.arcMat = new THREE.MeshBasicMaterial({
-      color: 0xe6ffe8, transparent: true, opacity: 0.75,
-      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
-    });
-    this.disc = new THREE.Group();
-    this.arcGeos = [];
-    for (let i = 0; i < 3; i++) {
-      const g = new THREE.RingGeometry(2.4, 3.6, 40, 1, 0, Math.PI * 0.5); g.rotateX(-Math.PI / 2);
-      const a = new THREE.Mesh(g, this.arcMat);
-      a.rotation.y = (i * Math.PI * 2) / 3; a.position.y = 0.7;
-      this.disc.add(a); this.arcGeos.push(g);
-    }
-    this.group.add(this.disc);
-
+    this.life = 1.6;   // 刀風粒子壽命最長約 1.45s（0.2 延遲 + 1.05 壽命 + 收尾）
+    this.fx = new BladeStormFX(center);
     this.waves = [{ t: 0.12, p: 8, done: false }, { t: 0.5, p: 7, done: false }, { t: 0.9, p: 6, done: false }];
   }
 
   update(dt) {
     this.time += dt;
-    this.disc.rotation.y += dt * 22;
-    const k = this.time / this.life;
-    for (const r of this.rings) {
-      const kk = Math.max(0, (this.time - r.delay) / this.life);
-      const s = 1 + kk * this.maxR;
-      r.m.scale.set(s, 1, s);
-    }
-    this.ringMat.opacity = Math.max(0, 0.85 * (1 - k));
-    this.arcMat.opacity = Math.max(0, 0.75 * (1 - k * 0.8));
     for (const w of this.waves) if (!w.done && this.time >= w.t) { w.done = true; this.aoe(w.p); }
     return this.time < this.life;
   }
 
   dispose() {
-    this.scene.remove(this.group);
-    this.ringMat.dispose(); this.arcMat.dispose();
-    this.rings.forEach((r) => r.geo.dispose());
-    this.arcGeos.forEach((g) => g.dispose());
+    this.fx.dispose();
+  }
+}
+
+// ---------- 呂布：滿場紅色粒子噴發（與劍雨兩波傷害同步）----------
+class RedStorm {
+  constructor(field) {
+    this.time = 0;
+    this.life = 2.8;   // 最後一波 0.9s 噴發 + 最長 1.7s 粒子壽命
+    this.fx = new RedStormFX(field);
+  }
+
+  update(dt) {
+    this.time += dt;
+    return this.time < this.life;
+  }
+
+  dispose() {
+    this.fx.dispose();
   }
 }
 
@@ -240,6 +215,7 @@ export class UltimateManager {
     const aoe = (p) => this.aoe(p);
     if (kind === 'lubu') {
       this.effects.push(new SkySwords(this.scene, this.field, aoe, this.shake));
+      this.effects.push(new RedStorm(this.field));
     } else if (kind === 'guanyu') {
       this.effects.push(new Whirlwind(this.scene, this.getHeroPos(), aoe));
       this.shake(false);
