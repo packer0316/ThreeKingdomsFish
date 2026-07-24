@@ -1387,6 +1387,48 @@ html, body {
   border-color: rgba(140,255,160,.6);
 }
 
+/* ==================== 大招登場橫幅 ==================== */
+#ult-banner {
+  position: absolute;
+  top: 20%;
+  left: 0; right: 0;
+  z-index: 42;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+#ult-banner.hidden { display: none; }
+#ult-banner .ult-who {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: #ffe9b0;
+  text-shadow: 0 2px 6px #000, 0 0 14px rgba(255, 180, 60, .6);
+}
+#ult-banner .ult-skill {
+  font-size: 60px;
+  font-weight: 900;
+  letter-spacing: 12px;
+  text-indent: 12px;
+  color: #fff;
+  background: linear-gradient(180deg, #fff3c8, #ffd15a 55%, #e0902a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .7)) drop-shadow(0 0 18px rgba(255, 170, 50, .55));
+}
+#ult-banner.show .ult-who { animation: ultWhoIn .5s ease-out backwards; }
+#ult-banner.show .ult-skill { animation: ultSkillIn .6s cubic-bezier(.2, 1.5, .4, 1) backwards; }
+@keyframes ultWhoIn { from { opacity: 0; transform: translateY(10px); } }
+@keyframes ultSkillIn {
+  0%   { opacity: 0; transform: scale(2.2); letter-spacing: 44px; }
+  100% { opacity: 1; transform: scale(1); }
+}
+#ult-banner.show { animation: ultFade 1.5s ease forwards; }
+@keyframes ultFade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
 /* ==================== Boss 登場開場（BossComing） ==================== */
 #boss-coming {
   position: absolute;

@@ -247,6 +247,11 @@ export class Recruit {
     }).join('');
   }
 
+  // 招募面板是否開啟中（開啟時整片覆蓋戰場，援軍計時應暫停）
+  get isOpen() {
+    return !this.el.modal.classList.contains('hidden');
+  }
+
   open() {
     this.el.btn.classList.add('active');
     this.refreshCoins();

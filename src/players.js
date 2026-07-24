@@ -79,6 +79,20 @@ export class AIPlayer {
     if (data.coins != null) this.coins = data.coins;
   }
 
+  // 重置出手狀態（換房重建時用）：放掉目標、鬆弦、收起搭箭
+  reset() {
+    this.current = null;
+    this.retargetCooldown = 0;
+    this.phase = 'idle';
+    this.phaseT = 0;
+    this.drawVal = 0;
+    this.applyDraw(0);
+    const parts = this.turret.userData.parts;
+    if (parts && parts.nockedArrow) parts.nockedArrow.visible = false;
+    if ('selected' in this) this.selected = null;   // PlayerArcher 的滑鼠鎖定
+    if (this.ring) this.ring.visible = false;       // PlayerArcher 的鎖定紅圈
+  }
+
   // 金錢真實計算：放箭消耗下注、擊殺獲得獎勵，變動即通知 HUD
   pay(amount) {
     this.coins = Math.max(0, this.coins - amount);
@@ -527,6 +541,21 @@ export class MeleeGeneral {
     this.home.x = x;
     // 非攻擊狀態時直接歸位，避免長距離走動穿越戰場
     if (!this.target) this.mesh.position.x = x;
+  }
+
+  // 清除衝刺殘影與塵光、放掉鎖定（換房重建時用）
+  clearFx() {
+    for (const g of this.ghosts) {
+      g.root.visible = false;
+      g.life = 0;
+      if (g.mat) g.mat.opacity = 0;
+    }
+    for (const p of this.dust) this.scene.remove(p.mesh);
+    this.dust.length = 0;
+    this.selected = null;
+    this.target = null;
+    this.holdTimer = 0;
+    this.ultLock = 0;
   }
 
   // 啟用 / 停用（切換到弓將黃忠時，近戰武將整個隱藏並停止更新）

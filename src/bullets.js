@@ -61,4 +61,10 @@ export class BulletManager {
     // 箭矢幾何體為共用快取，不可 dispose
     this.bullets.splice(i, 1);
   }
+
+  // 清空所有在場飛行中的箭矢 / 砲彈（換房重建時用）
+  clear() {
+    for (const b of this.bullets) this.scene.remove(b.mesh);
+    this.bullets.length = 0;
+  }
 }

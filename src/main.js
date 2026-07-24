@@ -6,6 +6,7 @@ import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
 import { Recruit } from './recruit.js';
 import { SummonManager } from './summons.js';
+import { UltimateManager } from './ultimates.js';
 import { BossShow, hasBossShow } from './bossshow.js';
 import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
@@ -62,7 +63,15 @@ function rebuildBattlefield(room) {
   const sceneChanged = next.id !== currentScene.id;
   currentScene = next;
 
+  // 清乾淨所有在場殘留，讓這一房從頭開始：
+  bulletMgr.clear();                     // 已送出的箭矢 / 砲彈
+  clearEffects();                        // 火花 + 金幣特效
+  for (const p of aiPlayers) p.reset();  // 其他玩家（AI）出手狀態
+  playerArcher.reset();                  // 黃忠出手狀態
   hero.clearSelection();                 // 放掉鎖定目標
+  hero.clearFx();                        // 我方近戰武將的殘影 / 塵光
+  summons.clear();                       // 招募援軍全部撤場
+
   buildEnvironment(scene, next.env);     // 拆掉舊環境、重建環境
   enemyMgr.setScene(next);               // 清場並重置生成/Boss/官銜/台詞計時
   bossPlate.setBoss(next.boss);
@@ -113,6 +122,7 @@ function attemptShot() {
   if (state.coins < bet) return false;
   state.coins -= bet;
   ui.refresh();
+  rollUltimate();   // 黃忠每箭小機率觸發箭雨大招
   return true;
 }
 
@@ -167,6 +177,28 @@ function summonDealDamage(enemy, power, hitPos) {
   if (enemy.isBoss) handleBossDeath(enemy, reward, '招募援軍', false);
   enemyMgr.removeEnemy(enemy);
   return true;
+}
+
+// ---------- 玩家武將大招（每次攻擊約 5% 觸發全場範圍技）----------
+const ULT_CHANCE = 0.05;
+function shakeScreen(strong) {
+  const r = ui.el.root;
+  r.classList.remove('fx-shake', 'fx-shake-strong');
+  void r.offsetWidth;
+  r.classList.add(strong ? 'fx-shake-strong' : 'fx-shake');
+}
+const ultimates = new UltimateManager(scene, enemyMgr, {
+  dealDamage: summonDealDamage,       // 大招擊殺沿用援軍的獎勵結算
+  shake: shakeScreen,
+  getHeroPos: () => hero.mesh.position,
+  field: FIELD,
+});
+
+// 依目前操控角色擲一次大招機率
+function rollUltimate() {
+  if (Math.random() >= ULT_CHANCE) return;
+  const kind = activeCharType === 'archer' ? 'huangzhong' : (hero.character && hero.character.id);
+  if (kind) ultimates.trigger(kind);
 }
 
 // ---------- 左中：招募系統（花費籌碼 + 時間，老虎機抽武將）----------
@@ -292,6 +324,7 @@ function attemptSlash(enemy) {
 
   state.coins -= bet;
   ui.refresh();
+  rollUltimate();   // 近戰每刀小機率觸發大招
 
   spawnSpark(enemy.mesh.position.clone().setY(1.6));
   const power = 1 + Math.floor(ui.betIndex / 2); // 下注越高、刀傷越高
@@ -342,7 +375,9 @@ function onHit(enemy, bullet, hitPos) {
 // 其他玩家（AI）擊殺或無表演的 Boss，維持一般大獎彈窗。
 function handleBossDeath(enemy, reward, catcher, byPlayer) {
   bossPlate.died();   // 死亡台詞停留在倒下位置
-  if (byPlayer && hasBossShow(enemy.def.id)) {
+  // 有開獎表演的守將（華雄 / 曹操）：無論最後一擊由玩家近戰、AI 遠程或招募援軍造成，
+  // 一律進入開獎表演（byPlayer 僅用於一般大獎彈窗的顯示者文案）。
+  if (hasBossShow(enemy.def.id)) {
     // 進入開獎表演：以玩家目前下注滾分，結束後才把獎金入袋、恢復戰鬥
     const bossName = enemy.name;
     bossShow.play(enemy.def.id, ui.bet, (prize, mult) => {
@@ -379,6 +414,14 @@ function burstCoins(pos) {
     scene.add(m);
     coins.push({ mesh: m, v, life: 0.9 });
   }
+}
+
+// 清空火花與金幣特效（換房重建時用）
+function clearEffects() {
+  for (const s of sparks) scene.remove(s.mesh);
+  sparks.length = 0;
+  for (const c of coins) scene.remove(c.mesh);
+  coins.length = 0;
 }
 
 function updateEffects(dt) {
@@ -452,7 +495,11 @@ function loop() {
   for (const p of aiPlayers) p.update(dt);
 
   // 招募援軍自動作戰（近戰衝殺 / 遠程施法）
-  summons.update(dt);
+  // 招募面板開啟時整片覆蓋戰場，暫停援軍計時，避免玩家看結算/登場特效時就把出戰時間耗光
+  if (!recruit.isOpen) summons.update(dt);
+
+  // 玩家武將大招特效（天降萬劍 / 刀風橫掃 / 箭雨）
+  ultimates.update(dt);
 
   enemyMgr.update(dt, (boss) => {
     ui.pushMarquee(`⚔ ${currentScene.name}守將「${boss.name}」出關搦戰！斬其首級可奪大獎！`);
@@ -500,6 +547,7 @@ function showSceneBanner() {
 // 供主控台除錯 / 自動化測試使用
 window.__game = {
   hero, playerArcher, enemyMgr, ui, camera, bossPlate, bossShow, scene, roomSelect, recruit,
+  summons, bulletMgr, sparks, coins,
   rebuildBattlefield, runRoomTransition,
   get currentScene() { return currentScene; },
   get activeCharType() { return activeCharType; },
