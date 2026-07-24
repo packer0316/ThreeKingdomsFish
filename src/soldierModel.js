@@ -116,9 +116,10 @@ function build() {
   return { model, mixer, actions };
 }
 
-// 取得一隻小兵實例；模板已載好則同步回呼，否則載好後回呼
+// 取得一隻小兵實例；回呼一律延後到微任務（避免在 Enemy 建構子中同步執行，
+// 造成建構子本體把回呼設定的狀態覆蓋）
 export function spawnSoldier(onReady) {
-  if (template) { onReady(build()); return; }
+  if (template) { queueMicrotask(() => onReady(build())); return; }
   waiters.push(onReady);
   preloadSoldier();
 }

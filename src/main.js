@@ -174,8 +174,7 @@ function summonDealDamage(enemy, power, hitPos) {
   const s = worldToScreen(enemy.mesh.position.clone().setY(2));
   ui.floatCoin(s.x, s.y, reward);
   burstCoins(enemy.mesh.position.clone());
-  if (enemy.isBoss) handleBossDeath(enemy, reward, '招募援軍', false);
-  enemyMgr.killEnemy(enemy);
+  resolveKill(enemy, reward, '招募援軍', false);
   return true;
 }
 
@@ -337,8 +336,7 @@ function attemptSlash(enemy) {
     const s = worldToScreen(enemy.mesh.position.clone().setY(2));
     ui.floatCoin(s.x, s.y, reward);
     burstCoins(enemy.mesh.position.clone());
-    if (enemy.isBoss) handleBossDeath(enemy, reward, '你（中座）', true);
-    enemyMgr.killEnemy(enemy);   // 小兵播擊倒動作後移除；Boss 立即移除
+    resolveKill(enemy, reward, '你（中座）', true);
   }
   return true;
 }
@@ -365,18 +363,26 @@ function onHit(enemy, bullet, hitPos) {
   burstCoins(enemy.mesh.position.clone());
 
   // 鎮守 Boss 陣亡：byPlayer = 最後一擊是否為中座玩家（owner 為 null 時是玩家）
-  if (enemy.isBoss) handleBossDeath(enemy, reward, owner ? owner.def.name : '你（中座）', !owner);
-  enemyMgr.killEnemy(enemy);
+  resolveKill(enemy, reward, owner ? owner.def.name : '你（中座）', !owner);
 }
 
 // Boss 陣亡統一處理：只有「本人」擊殺且該 Boss 有開獎表演時才進表演；
 // 其他玩家（AI）擊殺或無表演的 Boss，維持一般大獎彈窗。
-function handleBossDeath(enemy, reward, catcher, byPlayer) {
-  bossPlate.died();   // 死亡台詞停留在倒下位置
-  // 有開獎表演的守將（華雄 / 曹操）：無論最後一擊由玩家近戰、AI 遠程或招募援軍造成，
-  // 一律進入開獎表演（byPlayer 僅用於一般大獎彈窗的顯示者文案）。
+// 擊殺結算入口：小兵直接處理；Boss 先讓名牌顯示死亡台詞，
+// 並把「開獎表演 / 大獎彈窗」延後到 Boss 倒地動作播完、屍體移除後才觸發
+// （華雄 FBX 有倒地動作 → 先倒地再開獎；曹操等無倒地動作 → 立即開獎）。
+function resolveKill(enemy, reward, catcher, byPlayer) {
+  if (enemy.isBoss) {
+    bossPlate.died();
+    enemyMgr.killEnemy(enemy, () => presentBossDeath(enemy, reward, catcher, byPlayer));
+  } else {
+    enemyMgr.killEnemy(enemy);
+  }
+}
+
+function presentBossDeath(enemy, reward, catcher, byPlayer) {
+  // 有開獎表演的守將（華雄 / 曹操）：無論最後一擊由誰造成，一律進入開獎表演。
   if (hasBossShow(enemy.def.id)) {
-    // 進入開獎表演：以玩家目前下注滾分，結束後才把獎金入袋、恢復戰鬥
     const bossName = enemy.name;
     bossShow.play(enemy.def.id, ui.bet, (prize, mult) => {
       state.coins += prize;
@@ -506,8 +512,8 @@ function loop() {
   bulletMgr.update(dt, enemyMgr.enemies, onHit);
   updateEffects(dt);
 
-  // 鎮守 Boss 頭上名牌 / 台詞泡泡（跟隨螢幕座標）
-  const boss = enemyMgr.boss;
+  // 鎮守 Boss 頭上名牌 / 台詞泡泡（跟隨螢幕座標）；倒地中的 Boss 視為已無名牌
+  const boss = enemyMgr.boss && !enemyMgr.boss.dead ? enemyMgr.boss : null;
   bossPlate.update(
     dt,
     boss,

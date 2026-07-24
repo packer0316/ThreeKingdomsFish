@@ -1,0 +1,100 @@
+import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+// 華雄 Boss 專用 FBX 模型（public/models/huashong/）--------------------
+// 動作：Walking（走路）、Sword_Shout（進場喝令 POSE）、
+//       Shot_and_Slow_Fall_Backward（被擊倒後緩緩倒地）。
+
+const BASE = import.meta.env.BASE_URL || '/';
+const FBX_URL = BASE + 'models/huashong/Meshy_AI_three_kingdoms_genera_biped_Meshy_AI_Meshy_Merged_Animations.fbx';
+const TEX_URL = BASE + 'models/huashong/Meshy_AI_three_kingdoms_genera_biped_texture_0.png';
+
+const BASE_HEIGHT = 3.3;   // 正規化基準高度（同一般武將）
+const SCALE_MULT = 1.6;    // 放大 1.6 倍
+const MODEL_YAW = 0;       // 正面方向修正（弧度）
+
+let template = null;
+let loading = null;
+const waiters = [];
+
+function findClip(anims, keyword) {
+  const k = keyword.toLowerCase();
+  return anims.find((a) => (a.name || '').toLowerCase().includes(k)) || null;
+}
+
+export function preloadHuaxiong() {
+  if (loading) return loading;
+  loading = new Promise((resolve, reject) => {
+    const manager = new THREE.LoadingManager();
+    manager.setURLModifier((url) => (/\.png$/i.test(url) ? TEX_URL : url));
+    const loader = new FBXLoader(manager);
+    loader.load(
+      FBX_URL,
+      (fbx) => {
+        const anims = fbx.animations || [];
+        const box = new THREE.Box3().setFromObject(fbx);
+        const size = box.getSize(new THREE.Vector3());
+        const scale = (size.y > 0 ? BASE_HEIGHT / size.y : 1) * SCALE_MULT;
+        template = {
+          object: fbx,
+          scale,
+          min: box.min.clone(),
+          center: box.getCenter(new THREE.Vector3()),
+          walkClip: findClip(anims, 'walk'),
+          shoutClip: findClip(anims, 'shout'),
+          judgmentClip: findClip(anims, 'judgment'),
+          deathClip: findClip(anims, 'fall') || findClip(anims, 'backward'),
+        };
+        if (!template.walkClip || !template.shoutClip || !template.deathClip) {
+          console.warn('[huaxiong] 動作名稱：', anims.map((a) => a.name));
+        }
+        resolve(template);
+        for (const w of waiters) w(build());
+        waiters.length = 0;
+      },
+      undefined,
+      (err) => { console.error('[huaxiong] FBX 載入失敗', err); reject(err); }
+    );
+  });
+  return loading;
+}
+
+function build() {
+  const t = template;
+  const model = cloneSkeleton(t.object);
+  model.scale.setScalar(t.scale);
+  model.position.set(-t.center.x * t.scale, -t.min.y * t.scale, -t.center.z * t.scale);
+  model.rotation.y = MODEL_YAW;
+
+  const toLambert = (m) => {
+    const tex = m ? (m.map || m.matcap || m.emissiveMap || null) : null;
+    if (tex) tex.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshLambertMaterial({ map: tex, color: tex ? 0xffffff : new THREE.Color(0xcccccc) });
+  };
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = false;
+    o.frustumCulled = false;
+    o.material = Array.isArray(o.material) ? o.material.map(toLambert) : toLambert(o.material);
+  });
+
+  const mixer = new THREE.AnimationMixer(model);
+  const actions = {};
+  if (t.walkClip) actions.walk = mixer.clipAction(t.walkClip);
+  if (t.shoutClip) actions.shout = mixer.clipAction(t.shoutClip);
+  if (t.judgmentClip) actions.judgment = mixer.clipAction(t.judgmentClip);
+  if (t.deathClip) actions.death = mixer.clipAction(t.deathClip);
+  return { model, mixer, actions };
+}
+
+export function spawnHuaxiong(onReady) {
+  // 一律延後到微任務：模板已快取時若同步回呼，會在 BossEnemy 建構子
+  // super() 期間執行，隨後建構子本體把進場狀態蓋掉 → Boss 永遠卡在原地。
+  if (template) { queueMicrotask(() => onReady(build())); return; }
+  waiters.push(onReady);
+  preloadHuaxiong();
+}
+
+preloadHuaxiong();

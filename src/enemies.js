@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
 import { makeSoldier, makeBoss, makeTitleLabel, makeSpeechBubble } from './models.js';
 import { spawnSoldier } from './soldierModel.js';
+import { spawnHuaxiong } from './huaxiongModel.js';
 
 // 敵人物件與生成管理 --------------------------------------------
 
@@ -34,7 +35,17 @@ export class Enemy {
     this.dying = false;      // 播放擊倒動作中（播完才真正移除）
     this.deathT = 0;
 
-    if (isBoss) {
+    if (isBoss && def.id === 'huaxiong') {
+      // 華雄改用專用 FBX：空群組佔位，載好後掛入（進場/走路/擊倒由 BossEnemy 控制）
+      this.mesh = new THREE.Group();
+      spawnHuaxiong((inst) => {
+        if (this.removed) return;
+        this.mesh.add(inst.model);
+        this.mixer = inst.mixer;
+        this.actions = inst.actions;
+        if (this.onBossModelReady) this.onBossModelReady();
+      });
+    } else if (isBoss) {
       this.mesh = makeBoss(def);
     } else {
       // 小兵改用共用 FBX 模型：先放空群組佔位，載好後掛入並播放 Walking
@@ -193,6 +204,66 @@ export class BossEnemy extends Enemy {
     this.pauseT = 0;                       // 停步耀武倒數
     this.targetYaw = this.mesh.rotation.y;
     this.pickWaypoint();
+
+    // FBX 華雄：進場先原地 Sword_Shout，播完才開始走路
+    this.isFbxBoss = def.id === 'huaxiong';
+    this.entryDone = !this.isFbxBoss;      // 程序化 Boss（曹操）不需進場 POSE
+    this.entryReady = false;
+    this.entryT = 0;
+    this.oneShotT = 0;                     // 一次性演出（Sword_Judgment）剩餘秒數
+  }
+
+  // 隨機演出 Sword_Judgment（原地一次），播完回到走路
+  playJudgment() {
+    const a = this.actions.judgment;
+    if (!a) return false;
+    if (this.actions.walk) this.actions.walk.fadeOut(0.15);
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+    a.fadeIn(0.1); a.play();
+    this.oneShotT = (a.getClip().duration || 1.5);
+    return true;
+  }
+
+  // FBX 模型載好：播進場喝令動作 Sword_Shout（原地），播完轉走路
+  onBossModelReady() {
+    if (this.dead) { this.startDeath(); return; }
+    if (this.actions.shout) {
+      const a = this.actions.shout;
+      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+      a.fadeIn(0.1); a.play();
+      this.entryT = (a.getClip().duration || 1.2);
+      this.entryReady = true;
+    } else {
+      this.entryDone = true;
+      this.playWalk();
+    }
+  }
+
+  playWalk() {
+    const a = this.actions.walk;
+    if (!a) return;
+    // 先淡出一次性動作（喝令 / 判決），避免其 clamp 的最後一格壓住走路造成卡住
+    if (this.actions.shout && this.actions.shout !== a) this.actions.shout.fadeOut(0.2);
+    if (this.actions.judgment && this.actions.judgment !== a) this.actions.judgment.fadeOut(0.2);
+    a.reset();
+    a.setLoop(THREE.LoopRepeat, Infinity);
+    a.enabled = true;
+    a.setEffectiveWeight(1);
+    a.fadeIn(0.2);
+    a.play();
+  }
+
+  // 被擊倒：播 Shot_and_Slow_Fall_Backward，播完（deathT 到）由 update 回報移除
+  startDeath() {
+    if (!this.isFbxBoss || !this.mixer || !this.actions.death) return false;
+    this.dying = true;
+    if (this.actions.walk) this.actions.walk.fadeOut(0.15);
+    if (this.actions.shout) this.actions.shout.fadeOut(0.15);
+    const a = this.actions.death;
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+    a.fadeIn(0.1); a.play();
+    this.deathT = (a.getClip().duration || 1.5) + 0.25;
+    return true;
   }
 
   // 徘徊定點：避開貼邊，集中在關前中央區域
@@ -205,6 +276,30 @@ export class BossEnemy extends Enemy {
   }
 
   update(dt) {
+    if (this.mixer) this.mixer.update(dt);
+
+    // 擊倒動作播放中：不移動，播完回報移除（屍體消失）
+    if (this.dying) {
+      this.deathT -= dt;
+      return this.deathT > 0;
+    }
+
+    // 進場喝令中：原地不動，等 Sword_Shout 播完再開始走路
+    if (!this.entryDone) {
+      if (this.entryReady) {
+        this.entryT -= dt;
+        if (this.entryT <= 0) { this.entryDone = true; this.playWalk(); }
+      }
+      return true;
+    }
+
+    // 隨機演出 Sword_Judgment 中：原地不動，播完回到走路
+    if (this.oneShotT > 0) {
+      this.oneShotT -= dt;
+      if (this.oneShotT <= 0) this.playWalk();
+      return true;
+    }
+
     const p = this.mesh.position;
 
     if (this.pauseT > 0) {
@@ -216,8 +311,13 @@ export class BossEnemy extends Enemy {
       const dz = this.waypoint.z - p.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.6) {
-        this.pauseT = 1.2 + Math.random() * 1.8;
         this.pickWaypoint();
+        // 抵達定點：約 5% 機率演一次 Sword_Judgment，否則停步耀武
+        if (this.actions.judgment && Math.random() < 0.05) {
+          this.playJudgment();
+        } else {
+          this.pauseT = 1.2 + Math.random() * 1.8;
+        }
       } else {
         const spd = this.speed * 1.8;
         p.x += (dx / dist) * spd * dt;
@@ -232,15 +332,17 @@ export class BossEnemy extends Enemy {
     dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
     this.mesh.rotation.y += dYaw * Math.min(1, dt * 6);
 
-    // 走路擺動（停步時幅度縮小）
-    const parts = this.mesh.userData.parts;
-    if (parts) {
-      const s = Math.sin(this.walkPhase) * (this.pauseT > 0 ? 0.12 : 0.5);
-      parts.legL.rotation.x = s;
-      parts.legR.rotation.x = -s;
-      parts.armR.rotation.x = -0.5 - s * 0.4;
+    // 走路擺動（程序化 Boss 用；FBX 由動畫驅動，跳過）
+    if (!this.mixer) {
+      const parts = this.mesh.userData.parts;
+      if (parts) {
+        const s = Math.sin(this.walkPhase) * (this.pauseT > 0 ? 0.12 : 0.5);
+        parts.legL.rotation.x = s;
+        parts.legR.rotation.x = -s;
+        parts.armR.rotation.x = -0.5 - s * 0.4;
+      }
+      p.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
     }
-    p.y = Math.abs(Math.sin(this.walkPhase)) * 0.05;
 
     return true;   // 鎮守關前，永不離場
   }
@@ -475,11 +577,24 @@ export class EnemyManager {
     }
   }
 
-  // 擊殺敵人：Boss 立即移除（沿用開獎/重生流程）；小兵先播擊倒動作再移除
-  killEnemy(enemy) {
+  // 擊殺敵人。
+  //  小兵：播擊倒動作後移除。
+  //  Boss：有 FBX 擊倒動作（華雄）→ 播完倒地、屍體消失後才觸發 onGone（開獎/大獎）；
+  //        無擊倒動作（曹操）→ 立即移除並即刻 onGone。
+  killEnemy(enemy, onGone) {
     if (!enemy || enemy.removed) return;
-    if (enemy.isBoss) { this.removeEnemy(enemy); return; }
+    if (enemy.isBoss) {
+      enemy.dead = true;
+      if (enemy.startDeath && enemy.startDeath()) {
+        enemy._onGone = onGone;   // 由 remove() 在屍體移除後呼叫
+        return;
+      }
+      this.removeEnemy(enemy);
+      if (onGone) onGone();
+      return;
+    }
     enemy.beginDeath();
+    if (onGone) onGone();
   }
 
   remove(index) {
@@ -503,6 +618,9 @@ export class EnemyManager {
       const max = this.sceneDef?.eliteCooldownMax ?? 16;
       this.eliteCooldowns.push({ title: e.title, t: min + Math.random() * (max - min) });
     }
+
+    // Boss 倒地動作播完、屍體移除後才觸發後續演出（開獎表演 / 大獎彈窗）
+    if (e._onGone) { const cb = e._onGone; e._onGone = null; cb(); }
   }
 
   removeEnemy(enemy) {

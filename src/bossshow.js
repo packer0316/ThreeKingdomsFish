@@ -345,7 +345,7 @@ export class BossShow {
     // ---- 故事圖卡：逐張淡入 → 停留 slideSeconds 秒 → 淡出 ----
     for (const s of show.slides) {
       if (this._skip) break;
-      img.src = s.src;
+      await this._setImg(img, s.src);      // 先確保圖片解碼完成，避免卡片先偏下再跳中
       caption.textContent = s.caption;
       slide.classList.add('show');
       await this._wait(show.slideSeconds * 1000 + 800);   // 含 0.8s 淡入
@@ -368,7 +368,7 @@ export class BossShow {
         if (roll < o.chance) { outcome = o; break; }
         roll -= o.chance;
       }
-      img.src = outcome.src;
+      await this._setImg(img, outcome.src);
       caption.textContent = outcome.caption;
       slide.classList.add('show');
       await sleep(show.fate.seconds * 1000 + 800);
@@ -505,6 +505,15 @@ export class BossShow {
     void root.offsetWidth;
     root.classList.add(cls);
     setTimeout(() => root.classList.remove(cls), 900);
+  }
+
+  // 設定圖片並等待解碼完成（最多 600ms），讓卡片一淡入就是完整尺寸、
+  // 直接置中，不會先以純字幕高度偏下定位、圖片載入後才跳回中央。
+  async _setImg(img, src) {
+    img.src = src;
+    try {
+      if (img.decode) await Promise.race([img.decode(), sleep(600)]);
+    } catch { /* decode 失敗（如已中止）仍照常顯示 */ }
   }
 
   // 可被「跳過」提前結束的等待（每 100ms 檢查一次）
