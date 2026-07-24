@@ -1143,6 +1143,111 @@ export function makeGeneralTurret(def) {
   return g;
 }
 
+// ---------- 招募武將（召喚單位）----------
+// type: '法' | '書'（遠程法術）｜ '騎' | '槍' | '劍'（近戰）
+// 回傳 group.userData.parts = { legL, legR, armR } 供走路 / 揮擊動畫。
+// 面向 -Z（戰場方向）。
+function makeSummonProp(type, color) {
+  const g = new THREE.Group();
+  if (type === '槍' || type === '騎') {
+    const shaft = cyl(0.05, 0.05, 3.2, 0x6b4a24, 6);
+    shaft.position.y = 0.6; g.add(shaft);
+    const tip = cyl(0.0, 0.12, 0.5, 0xdadada, 6, metalMat(0xcfcfd8));
+    tip.position.y = 2.35; g.add(tip);
+    const tassel = sph(0.12, 0xc0202a); tassel.position.y = 2.0; g.add(tassel);
+  } else if (type === '劍') {
+    const handle = cyl(0.05, 0.05, 0.5, 0x2a2a2a, 6); handle.position.y = 0.2; g.add(handle);
+    const guard = box(0.34, 0.08, 0.12, 0xffcf3a, metalMat(0xd8a83a)); guard.position.y = 0.46; g.add(guard);
+    const blade = box(0.13, 1.6, 0.05, 0xe8ecf6, metalMat(0xe8ecf6)); blade.position.y = 1.3; g.add(blade);
+    const tipB = cyl(0.0, 0.075, 0.28, 0xe8ecf6, 4, metalMat(0xe8ecf6));
+    tipB.scale.z = 0.35; tipB.position.y = 2.15; g.add(tipB);
+  } else if (type === '法') {
+    // 法杖：長桿 + 頂端能量寶珠（自發光）
+    const staff = cyl(0.05, 0.05, 2.4, 0x4a2f6a, 6); staff.position.y = 0.5; g.add(staff);
+    const claw = cyl(0.16, 0.05, 0.34, color, 6, metalMat(color)); claw.position.y = 1.75; g.add(claw);
+    const orb = new THREE.Mesh(sphGeo(0.2), new THREE.MeshBasicMaterial({ color }));
+    orb.position.y = 1.95; g.add(orb);
+  } else {
+    // 書：手持典籍 + 上方浮空符卷
+    const book = box(0.5, 0.62, 0.14, 0x8a2f2f, metalMat(0x8a2f2f)); book.position.y = 0.5; g.add(book);
+    const pages = box(0.42, 0.54, 0.16, 0xf0e8d0); pages.position.set(0, 0.5, 0.02); g.add(pages);
+    const glow = new THREE.Mesh(sphGeo(0.16), new THREE.MeshBasicMaterial({ color }));
+    glow.position.y = 1.0; g.add(glow);
+  }
+  return g;
+}
+
+function makeHorse(color = 0x5a3a22) {
+  // 模型正面朝 +Z（執行時整體再旋轉 180° 面向戰場），故馬頭在 +Z、馬尾在 -Z
+  const h = new THREE.Group();
+  const body = box(0.92, 0.95, 2.3, color); body.position.y = 1.5; h.add(body);
+  const rump = box(0.9, 0.9, 0.7, color); rump.position.set(0, 1.55, -1.0); h.add(rump);
+  const neck = box(0.5, 0.95, 0.55, color); neck.position.set(0, 2.02, 1.0); neck.rotation.x = 0.5; h.add(neck);
+  const head = box(0.42, 0.5, 0.85, color); head.position.set(0, 2.42, 1.45); h.add(head);
+  const mane = box(0.16, 0.9, 0.5, 0x2a1c10); mane.position.set(0, 2.1, 0.86); mane.rotation.x = 0.5; h.add(mane);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const leg = box(0.24, 1.5, 0.26, 0x241810);
+    leg.position.set(sx * 0.33, 0.75, sz * 0.85); h.add(leg);
+    const hoof = box(0.28, 0.2, 0.3, 0x14100a);
+    hoof.position.set(sx * 0.33, 0.1, sz * 0.85); h.add(hoof);
+  }
+  const tail = box(0.18, 1.0, 0.18, 0x2a1c10); tail.position.set(0, 1.55, -1.4); tail.rotation.x = -0.7; h.add(tail);
+  return h;
+}
+
+export function makeSummonGeneral(type, color = 0x9a6cff) {
+  const g = new THREE.Group();
+  const robe = color;
+  const isCaster = (type === '法' || type === '書');
+
+  let baseY = 0;
+  if (type === '騎') {
+    g.add(makeHorse(0x5a3a22));
+    baseY = 1.5;                 // 騎士抬高到馬背
+  }
+
+  const body = new THREE.Group();
+  body.position.y = baseY;
+  g.add(body);
+
+  const torso = box(0.9, 1.15, 0.56, robe); torso.position.y = 1.5; body.add(torso);
+  const shoulders = box(1.35, 0.3, 0.78, 0x3a3a42, metalMat(0x606070)); shoulders.position.y = 2.08; body.add(shoulders);
+  const belt = box(0.98, 0.2, 0.6, 0x6a4a1a); belt.position.y = 0.98; body.add(belt);
+  const head = sph(0.33, SKIN); head.position.y = 2.5; body.add(head);
+
+  if (isCaster) {
+    const cap = cyl(0.18, 0.34, 0.4, robe, 8); cap.position.y = 2.82; body.add(cap);   // 道冠 / 儒巾
+    const robeSkirt = box(1.0, 1.0, 0.62, robe); robeSkirt.position.y = 0.72; body.add(robeSkirt);
+  } else {
+    const helm = cyl(0.37, 0.45, 0.4, color, 12, metalMat(color)); helm.position.y = 2.72; body.add(helm);
+    for (const side of [-1, 1]) {
+      const plume = box(0.06, 0.7, 0.06, 0xd0202a);
+      plume.position.set(side * 0.16, 3.2, 0); plume.rotation.z = side * 0.3; body.add(plume);
+    }
+    const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6), mat(color, { side: THREE.DoubleSide }));
+    cape.position.set(0, 1.5, -0.4); cape.rotation.x = 0.12; body.add(cape);
+  }
+
+  const legL = box(0.3, 0.95, 0.36, 0x2a2a30); legL.position.set(-0.22, 0.5, 0); body.add(legL);
+  const legR = box(0.3, 0.95, 0.36, 0x2a2a30); legR.position.set(0.22, 0.5, 0); body.add(legR);
+
+  const armL = box(0.25, 0.9, 0.25, robe); armL.position.set(-0.6, 1.5, 0.05); body.add(armL);
+
+  const armR = new THREE.Group();
+  const armRm = box(0.25, 0.9, 0.25, robe); armRm.position.y = -0.35; armR.add(armRm);
+  armR.position.set(0.6, 1.85, 0.1); armR.rotation.x = -0.5; body.add(armR);
+
+  const prop = makeSummonProp(type, color);
+  prop.position.y = -0.62;
+  prop.rotation.x = GRIP_PITCH;
+  armR.add(prop);
+
+  g.userData.parts = { legL, legR, armR };
+  g.userData.armRBase = -0.5;
+  g.scale.setScalar(1.3);
+  return g;
+}
+
 // ---------- 箭矢 / 砲彈（共用幾何體與材質，發射頻繁不再逐發配置）----------
 const _projBodyMat = new THREE.MeshLambertMaterial({ color: 0x6b4a24 });
 const _projTipMat = new THREE.MeshLambertMaterial({ color: 0xd8d8e0, emissive: 0xd8d8e0, emissiveIntensity: 0.12 });

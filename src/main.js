@@ -5,6 +5,7 @@ import { BulletManager } from './bullets.js';
 import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
 import { Recruit } from './recruit.js';
+import { SummonManager } from './summons.js';
 import { BossShow, hasBossShow } from './bossshow.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { CHARACTERS } from './characters.js';
@@ -138,13 +139,43 @@ charBtns.forEach((btn) => {
   });
 });
 
+// ---------- 招募援軍：出現在座位兩側自動作戰（腳底紫圈）----------
+// 招募時間（小時）× 每小時秒數 = 援軍在場作戰的真實秒數。
+const SUMMON_SEC_PER_HOUR = 5;   // 6h → 30s，24h → 120s
+const summons = new SummonManager(scene, enemyMgr, {
+  dealDamage: summonDealDamage,
+  getPlayerX: () => SEAT_X[roomSelect.currentSeat],
+  turretZ: FIELD.turretZ,
+});
+
+// 援軍命中傷害：沿用擊殺獎勵（以玩家目前下注計獎），入袋並演出金幣/浮字
+function summonDealDamage(enemy, power, hitPos) {
+  if (!enemy || enemy.dead || enemy.removed) return false;
+  spawnSpark(hitPos);
+  const killed = enemy.hit(power);
+  if (!killed) return false;
+  enemy.dead = true;
+  const reward = Math.floor(ui.bet * enemy.value);
+  state.coins += reward;
+  ui.refresh();
+  const s = worldToScreen(enemy.mesh.position.clone().setY(2));
+  ui.floatCoin(s.x, s.y, reward);
+  burstCoins(enemy.mesh.position.clone());
+  if (enemy.isBoss) handleBossDeath(enemy, reward, '招募援軍', false);
+  enemyMgr.removeEnemy(enemy);
+  return true;
+}
+
 // ---------- 左中：招募系統（花費籌碼 + 時間，老虎機抽武將）----------
 const recruit = new Recruit(state);
 recruit.onSpend = () => ui.refresh();               // 扣款後同步底部 HUD 金錢
-recruit.onResult = (list) => {
+recruit.isSummonActive = () => summons.active;      // 援軍在場時顯示「重新招募」
+recruit.onResult = (list, hours) => {
   ui.refresh();
   const names = list.map((c) => `「${c.name}」(${c.rarity})`).join('、');
-  ui.pushMarquee(`🎯 恭喜你招募到 ${names}！`);
+  ui.pushMarquee(`🎯 恭喜你招募到 ${names}！援軍出戰 ${hours} 小時！`);
+  // 兩名援軍列陣玩家座位兩側，自動作戰指定時長
+  summons.summonPair(list, (hours || 1) * SUMMON_SEC_PER_HOUR);
 };
 
 // ---------- 左右兩側 AI 陪玩玩家（遠程砲台）----------
@@ -413,6 +444,9 @@ function loop() {
 
   // 左右 AI 玩家自動瞄準開火（遠程）
   for (const p of aiPlayers) p.update(dt);
+
+  // 招募援軍自動作戰（近戰衝殺 / 遠程施法）
+  summons.update(dt);
 
   enemyMgr.update(dt, (boss) => {
     ui.pushMarquee(`⚔ ${currentScene.name}守將「${boss.name}」出關搦戰！斬其首級可奪大獎！`);

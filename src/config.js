@@ -20,18 +20,18 @@ export const GENERALS = [
 // generalIndex 對應 GENERALS，x 為弓箭手的世界座標橫向位置
 // drawTime = 拉滿弓所需秒數，recoverTime = 放箭後回復 / 搭新箭秒數
 export const AI_PLAYERS = [
-  { seat: 'left',  name: '常山趙子龍', generalIndex: 1, x: -14, coins: 5_284_900, betIndex: 4, drawTime: 0.55, recoverTime: 0.4 },
-  { seat: 'right', name: '江東小霸王', generalIndex: 2, x: 14,  coins: 9_130_500, betIndex: 5, drawTime: 0.45, recoverTime: 0.3 },
+  { seat: 'left',  name: '超會開獎啦', generalIndex: 1, x: -14, coins: 5_284_900, betIndex: 4, drawTime: 0.55, recoverTime: 0.4 },
+  { seat: 'right', name: '我要贏大的', generalIndex: 2, x: 14,  coins: 9_130_500, betIndex: 5, drawTime: 0.45, recoverTime: 0.3 },
 ];
 
 // 選房用假資料：20 個房間，每房三個座位（左/中/右），各房分配不同的人。
 // 每房固定留一個空位（name: null）供玩家入座，對應選房頁面的佔用感。
 // seat.pos: 'left' | 'mid' | 'right'，generalIndex 對應 GENERALS。
 const ROOM_NAME_POOL = [
-  '常山趙子龍', '燕人張翼德', '臥龍先生', '江東小霸王',
-  '虎痴許褚', '錦帆賊甘寧', '美髯公', '飛將軍',
-  '錦馬超', '小李廣', '奉先無雙', '鳳雛龐統',
-  '虎威將軍', '西涼錦兒', '江東周郎', '常勝將軍',
+  '超會開獎啦', '我要贏大的', '超級殺大師', '歐皇附體',
+  '見錢眼開喵', '一把梭哈', '手氣爆棚中', '財神爺請進',
+  '小資翻身仔', '穩贏不輸啦', '暴擊小可愛', '今晚吃大餐',
+  '運氣爆表君', '金幣收割機', '爆分小旋風', '躺著也中獎',
 ];
 
 function buildRooms() {
@@ -257,7 +257,7 @@ export const FIELD = {
 
 // 假造的跑馬燈中獎訊息
 export const MARQUEE_NAMES = [
-  '常山趙子龍', '燕人張翼德', '臥龍先生', '江東小霸王',
-  '虎痴許褚', '錦帆賊甘寧', '美髯公', '飛將軍',
+  '超會開獎啦', '我要贏大的', '超級殺大師', '歐皇附體',
+  '見錢眼開喵', '一把梭哈', '手氣爆棚中', '財神爺請進',
 ];
 export const MARQUEE_TARGETS = ['呂布', '關羽', '張飛', '顏良', '文醜', '華雄'];

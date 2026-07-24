@@ -104,17 +104,17 @@ function fmtPct(v) {
 }
 
 // 稀有度機率（現代抽卡設計：越強機率越低）。
-// 基礎值（最低花費/時長）：SSR 1.5% / SR 8% / R 30.5% / H 60%
-// 花費與時間越高，越往紅/金傾斜（H 下降），但 SSR 仍維持低機率。
+// 基礎值（最低花費/時長）：SSR 5% / SR 15% / R 30% / H 50%
+// 花費與時間越高，越往紅/金傾斜（H 下降）。權重總和恆為 100。
 function rarityWeights(cost, hours) {
   const cf = clamp((cost - COST_MIN) / (COST_MAX - COST_MIN), 0, 1);
   const tf = clamp((hours - TIME_MIN) / (TIME_MAX - TIME_MIN), 0, 1);
   const boost = cf * 0.7 + tf * 0.3;      // 綜合加成係數 0~1
   return {
-    SSR: 1.5 + boost * 4.5,               // 1.5% → 6%
-    SR:  8 + boost * 17,                  // 8%  → 25%
-    R:   30.5 + boost * 4,                // 30.5% → 34.5%
-    H:   60 - boost * 25.5,               // 60% → 34.5%
+    SSR: 5 + boost * 3,                   // 5%  → 8%
+    SR:  15 + boost * 10,                 // 15% → 25%
+    R:   30 + boost * 2,                  // 30% → 32%
+    H:   50 - boost * 15,                 // 50% → 35%
   };
 }
 
@@ -166,6 +166,7 @@ export class Recruit {
     this.state = state;
     this.onResult = null;   // onResult(character)：招募成功後回呼
     this.onSpend = null;    // onSpend()：扣款後回呼（同步 HUD）
+    this.isSummonActive = null;  // ()->bool：目前是否有援軍在場（決定是否顯示重新招募）
     this.spinning = false;
 
     this.el = {
@@ -175,6 +176,7 @@ export class Recruit {
       cost: document.getElementById('recruit-cost'),
       time: document.getElementById('recruit-time'),
       go: document.getElementById('recruit-go'),
+      rego: document.getElementById('recruit-rego'),
       strips: [
         document.getElementById('recruit-strip-0'),
         document.getElementById('recruit-strip-1'),
@@ -200,6 +202,7 @@ export class Recruit {
       if (e.target === this.el.modal) this.close();
     });
     this.el.go.addEventListener('click', () => this.spin());
+    this.el.rego.addEventListener('click', () => this.spin());
     this.el.fx.addEventListener('click', () => this.hideFx());
     // 花費 / 時間 變動 → 即時更新顯示機率
     this.el.cost.addEventListener('input', () => this.renderRates());
@@ -248,6 +251,7 @@ export class Recruit {
     this.el.btn.classList.add('active');
     this.refreshCoins();
     this.renderRates();
+    this.updateRego();
     this.resetStrip();
     this.el.result.className = 'recruit-result';
     this.el.result.innerHTML = '';
@@ -262,6 +266,12 @@ export class Recruit {
 
   refreshCoins() {
     this.el.coins.textContent = Math.floor(this.state.coins).toLocaleString('en-US');
+  }
+
+  // 有援軍在場 → 顯示「重新招募」；否則只顯示「開始招募」
+  updateRego() {
+    const active = !!(this.isSummonActive && this.isSummonActive());
+    this.el.rego.classList.toggle('hidden', !active);
   }
 
   // 初始輪帶：兩排都填滿隨機頭像（尚未轉動）
@@ -306,6 +316,7 @@ export class Recruit {
 
     this.spinning = true;
     this.el.go.disabled = true;
+    this.el.rego.disabled = true;
     this.el.result.className = 'recruit-result';
     this.el.result.textContent = '招募中…';
 
@@ -335,15 +346,16 @@ export class Recruit {
 
       const done = () => {
         strip.removeEventListener('transitionend', done);
-        if (--pending === 0) this.finish(chosen);
+        if (--pending === 0) this.finish(chosen, hours);
       };
       strip.addEventListener('transitionend', done);
     });
   }
 
-  finish(list) {
+  finish(list, hours) {
     this.spinning = false;
     this.el.go.disabled = false;
+    this.el.rego.disabled = false;
     this.el.result.className = 'recruit-result reveal';
     this.el.result.innerHTML = list
       .map((c) => {
@@ -353,7 +365,8 @@ export class Recruit {
           `<span class="recruit-result-name">${c.name}</span></span>`;
       })
       .join('');
-    if (this.onResult) this.onResult(list);
+    if (this.onResult) this.onResult(list, hours);
+    this.updateRego();       // 招募後已有援軍在場 → 顯示「重新招募」
 
     // 招到非白色武將 → 依最高稀有度播放登場特效（越強越誇張）
     this.celebrate(list);
@@ -391,6 +404,10 @@ export class Recruit {
     void fx.offsetWidth;
     fx.classList.add('show');
 
+    // 5 秒後自動關閉（連同兩名武將頭貼一起收起）
+    clearTimeout(this._fxTimer);
+    this._fxTimer = setTimeout(() => this.hideFx(), 5000);
+
     // 螢幕震動：金震一下、紅震得更兇
     const root = this.el.root;
     root.classList.remove('fx-shake', 'fx-shake-strong');
@@ -425,6 +442,7 @@ export class Recruit {
   }
 
   hideFx() {
+    clearTimeout(this._fxTimer);
     this.el.fx.classList.remove('show');
     this.el.fx.classList.add('hidden');
     this.el.root.classList.remove('fx-shake', 'fx-shake-strong');

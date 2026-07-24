@@ -683,6 +683,26 @@ html, body {
 .recruit-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #7a5410; }
 .recruit-go:disabled { opacity: .5; cursor: default; box-shadow: 0 4px 0 #7a5410; }
 
+/* 重新招募（援軍在場時才出現，替換現有援軍）：紫色次要按鈕 */
+.recruit-rego {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #f3e9ff;
+  background: linear-gradient(180deg, #7b4fc0, #522f8a 60%, #3d216a);
+  border: 1px solid #b98cf0;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #2c1750, 0 6px 14px rgba(0, 0, 0, .5);
+}
+.recruit-rego:active { transform: translateY(2px); box-shadow: 0 2px 0 #2c1750; }
+.recruit-rego:disabled { opacity: .5; cursor: default; box-shadow: 0 4px 0 #2c1750; }
+.recruit-rego.hidden { display: none; }
+
 /* ---------- 招募中獎特效（非白色武將登場演出） ---------- */
 #recruit-fx {
   position: absolute;
@@ -693,6 +713,7 @@ html, body {
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
+  background: rgba(0, 0, 0, .62);   /* 壓黑背景，突顯中獎卡片 */
 }
 #recruit-fx.hidden { display: none; }
 

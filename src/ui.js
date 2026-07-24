@@ -56,7 +56,7 @@ export class UI {
         this.humanSeat = seat;
         el.innerHTML =
           `<div class="slot-name"><span class="slot-lvl">VIP</span>你` +
-            `<span class="slot-bet">下注 ${fmt(o.bet)}</span></div>` +
+            `<span class="slot-bet">bet ${fmt(o.bet)}</span></div>` +
           `<div class="slot-money-row">` +
             `<button class="round-btn" data-bet="down">−</button>` +
             `<div class="slot-money"><span class="dollar">$</span>` +
@@ -68,7 +68,7 @@ export class UI {
       } else {
         el.innerHTML =
           `<div class="slot-name"><span class="slot-lvl">弓</span>${o.name}` +
-            `<span class="slot-bet">押 ${fmt(o.bet)}</span></div>` +
+            `<span class="slot-bet">bet ${fmt(o.bet)}</span></div>` +
           `<div class="slot-money-row">` +
             `<div class="slot-money"><span class="dollar">$</span>` +
               `<span class="slot-money-value">${fmt(o.coins)}</span></div>` +
@@ -82,7 +82,7 @@ export class UI {
     this.betIndex = Math.max(0, Math.min(BET_LEVELS.length - 1, this.betIndex + dir));
     const el = this.el.slots[this.humanSeat];
     const betEl = el && el.querySelector('.slot-bet');
-    if (betEl) betEl.textContent = '下注 ' + fmt(this.bet);
+    if (betEl) betEl.textContent = 'bet ' + fmt(this.bet);
   }
 
   // 更新某座位的金錢數字（帶一次得分閃爍）
