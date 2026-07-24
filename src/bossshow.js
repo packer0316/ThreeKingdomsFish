@@ -438,7 +438,9 @@ export class BossShow {
     prizeEl.classList.toggle('big', isBig);
 
     await this._rollAmount(amountEl, prize, 4000);
-    prizeEl.classList.add('celebrate');       // 滾滿：金額爆亮 + 光芒加速
+    prizeEl.classList.add('celebrate');       // 滾滿：金額爆擊 + 沖擊波 + 光芒加速
+    this._burstCoins(isBig ? 46 : 28);        // 金幣噴發
+    this._screenShake(isBig);                 // 螢幕震一下
     await this._holdOrClick(2200);            // 停留展示（點擊提早收場）
 
     // ---- 收場：淡出、恢復戰鬥 ----
@@ -471,6 +473,38 @@ export class BossShow {
       };
       raf = requestAnimationFrame(tick);
     });
+  }
+
+  // 金幣噴發：由中心噴出後落下（純 CSS 動畫，動畫結束即移除）
+  _burstCoins(n) {
+    const prize = this.q('.bs-prize');
+    if (!prize) return;
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'bs-coin';
+      c.style.left = '50%';
+      c.style.top = '56%';
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.15; // 上半噴射
+      const dist = 160 + Math.random() * 420;
+      c.style.setProperty('--tx', `${Math.cos(ang) * dist}px`);
+      c.style.setProperty('--ty', `${-Math.abs(Math.sin(ang)) * dist - 60}px`);
+      c.style.setProperty('--rot', `${(Math.random() * 720 - 360)}deg`);
+      c.style.setProperty('--dur', `${1.1 + Math.random()}s`);
+      c.style.animationDelay = `${Math.random() * 0.25}s`;
+      prize.appendChild(c);
+      setTimeout(() => c.remove(), 2600);
+    }
+  }
+
+  // 螢幕震動（重用 game-root 的 fx-shake）
+  _screenShake(strong) {
+    const root = document.getElementById('game-root');
+    if (!root) return;
+    const cls = strong ? 'fx-shake-strong' : 'fx-shake';
+    root.classList.remove(cls);
+    void root.offsetWidth;
+    root.classList.add(cls);
+    setTimeout(() => root.classList.remove(cls), 900);
   }
 
   // 可被「跳過」提前結束的等待（每 100ms 檢查一次）

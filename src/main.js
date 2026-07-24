@@ -7,6 +7,7 @@ import { UI, RoomSelect, BossPlate } from './ui.js';
 import { Recruit } from './recruit.js';
 import { SummonManager } from './summons.js';
 import { BossShow, hasBossShow } from './bossshow.js';
+import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { CHARACTERS } from './characters.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
@@ -50,6 +51,8 @@ const bulletMgr = new BulletManager(scene);
 const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
 // Boss 開獎表演（玩家擊殺鎮守 Boss 觸發；表演期間全場暫停攻擊）
 const bossShow = new BossShow(ui.el.root);
+// Boss 登場開場（守將出關時先秀角色大圖）
+const bossComing = new BossComing(ui.el.root);
 document.getElementById('scene-badge').textContent = '⚔ ' + currentScene.name;
 
 // 換房一律「完全重建」戰場：即使輪到同一場景，環境、Boss、小兵、
@@ -207,6 +210,9 @@ function applyRoomSeat(room, humanSeat) {
     const data = room.seats.find((s) => s.pos === pos);
     if (data) p.applySeatData(data);
   });
+
+  // 招募援軍跟著移動到新座位兩側（換房/換座位時不掉隊）
+  summons.repositionToPlayer();
 
   renderHud(humanSeat);
 }
@@ -431,8 +437,8 @@ function loop() {
   positionSlots();            // 三人資訊欄對齊各座位武將
   if (!running) { renderer.render(scene, camera); return; }
 
-  // Boss 開獎表演 / 換房轉場中：全場暫停（玩家 / AI / 敵軍 / 砲彈皆停），只維持渲染
-  if (bossShow.active || transitioning) { renderer.render(scene, camera); return; }
+  // Boss 開獎表演 / 換房轉場 / Boss 登場開場中：全場暫停，只維持渲染
+  if (bossShow.active || transitioning || bossComing.active) { renderer.render(scene, camera); return; }
 
   // 中座玩家：黃忠 = 原地弓將自動射擊；否則近戰武將衝殺（點選優先，自動追最近）
   if (activeCharType === 'archer') {
@@ -450,6 +456,7 @@ function loop() {
 
   enemyMgr.update(dt, (boss) => {
     ui.pushMarquee(`⚔ ${currentScene.name}守將「${boss.name}」出關搦戰！斬其首級可奪大獎！`);
+    bossComing.play(boss.def.id);   // 守將出關：先播放登場大圖開場
   });
   bulletMgr.update(dt, enemyMgr.enemies, onHit);
   updateEffects(dt);

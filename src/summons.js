@@ -333,6 +333,18 @@ export class SummonManager {
     });
   }
 
+  // 換房/換座位：把在場援軍平移到新的玩家座位兩側（保留剩餘作戰時間）
+  repositionToPlayer() {
+    const px = this.getPlayerX();
+    const sides = [-1, 1];
+    this.units.forEach((u, i) => {
+      const x = px + sides[i % 2] * 5.5;
+      u.home.set(x, 0, this.turretZ);
+      u.mesh.position.set(x, 0, this.turretZ);
+      u.target = null;   // 重新選擇目標
+    });
+  }
+
   update(dt) {
     for (let i = this.units.length - 1; i >= 0; i--) {
       const u = this.units[i];
