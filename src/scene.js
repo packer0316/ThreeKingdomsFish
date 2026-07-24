@@ -355,7 +355,7 @@ function buildPass(scene) {
   buildGateTower(pass, wallMatV, woodMat);
 
   // 虎牢關匾額
-  pass.add(makePlaque('虎牢關'));
+  pass.add(makePlaque());
 
   scene.add(pass);
 }
@@ -555,26 +555,17 @@ function makeRoof(w, d, y, h) {
   return g;
 }
 
-// 匾額「虎牢關」
-function makePlaque(text) {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 192;
-  const ctx = c.getContext('2d');
-  const grd = ctx.createLinearGradient(0, 0, 0, 192);
-  grd.addColorStop(0, '#3a1c10'); grd.addColorStop(1, '#22120a');
-  ctx.fillStyle = grd; ctx.fillRect(0, 0, 512, 192);
-  ctx.strokeStyle = '#e0b040'; ctx.lineWidth = 12;
-  ctx.strokeRect(10, 10, 492, 172);
-  ctx.fillStyle = '#f0d38a';
-  ctx.font = 'bold 118px "Microsoft JhengHei", serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 256, 104);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
+// 匾額「虎牢關」：使用現成匾額貼圖（含紅木底與雕框），不再程式繪字
+function makePlaque() {
+  const tex = loadTex('textures/img/hulaoguan.png', 1, 1, true);
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x2a140b, roughness: 0.8 });
+  const faceMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 });
 
+  // 尺寸依貼圖比例（1339×397 ≈ 3.37:1）；僅正面貼圖，其餘面深木色
+  // BoxGeometry 材質面序：+x, -x, +y, -y, +z(正面), -z
   const board = new THREE.Mesh(
-    new THREE.BoxGeometry(6, 2.2, 0.4),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 })
+    new THREE.BoxGeometry(7.2, 2.14, 0.4),
+    [woodMat, woodMat, woodMat, woodMat, faceMat, woodMat]
   );
   board.position.set(0, GATE_H + 1.6, WALL_THICK / 2 + 0.1);
   board.castShadow = true;
