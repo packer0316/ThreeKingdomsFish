@@ -9,8 +9,16 @@ slot     來源資產 (ambientCG)   用途
 ground   Ground037              戰場地面（碎石泥土）
 road     PavingStones070        通往關門的石板道
 cliff    Rock030                兩側岩壁 / 山體
-wall     Bricks066              虎牢關城牆 / 關門石材
+wall     Bricks066              （已停用，保留備用）
+wall2    Bricks075A             虎牢關城牆 / 關門石材（風化石板牆）
 wood     Planks016              關門木門 / 木構件
+
+以下取自 Poly Haven (https://polyhaven.com)，授權同為 CC0：
+
+slot         來源資產 (Poly Haven)   用途
+----------   ---------------------   ----------------------------
+sky/hulao    kiara_1_dawn (HDRI      虎牢關天空背景（等距柱狀全景，
+             tonemapped JPG)         黎明山景，縮至 2048x1024）
 
 每組含 color.jpg (Albedo)、normal.jpg (OpenGL Normal)、rough.jpg (Roughness)。
 License: https://docs.ambientcg.com/license/

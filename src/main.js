@@ -11,7 +11,6 @@ import { BossShow, hasBossShow } from './bossshow.js';
 import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { HitFX } from './hitfx.js';
-import { initSkillFX, updateSkillFX } from './skillfx.js';
 import { CHARACTERS } from './characters.js';
 import { DevPanel } from './dev.js';
 import { startBgm, playArrowHit } from './audio.js';
@@ -52,7 +51,6 @@ const ui = new UI(state);
 const enemyMgr = new EnemyManager(scene, currentScene);
 const bulletMgr = new BulletManager(scene);
 const hitFX = new HitFX(scene);   // 擊中粒子特效（three.quarks 物件池）
-initSkillFX(scene);               // 技能粒子特效（大招 / 援軍法術）
 
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
 const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
@@ -433,7 +431,6 @@ function clearEffects() {
 
 function updateEffects(dt) {
   hitFX.update(dt);
-  updateSkillFX(dt);
   for (let i = coins.length - 1; i >= 0; i--) {
     const c = coins[i];
     c.mesh.position.addScaledVector(c.v, dt);

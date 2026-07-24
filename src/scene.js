@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FIELD } from './config.js';
+import { initSkillFX, updateSkillFX, TorchFireFX } from './skillfx.js';
 
 // 戰場場景（可切換環境）------------------------------------------
 // 燈光 / 攝影機常駐；環境（地形、建築、道具）集中放在 envRoot 群組，
@@ -24,9 +25,10 @@ const GATE_H = 7.2;      // 關門洞高
 // 目前環境的根群組與動態特效註冊表（換場景時一併清空）
 let envRoot = null;
 const envFx = {
-  fires: [],     // 烽火盆火焰 { flame, phase }
+  fires: [],     // 燈籠火光 { flame, phase }（火炬/烽火盆已改用粒子）
   waters: [],    // 水面貼圖捲動 { tex }
   bobbers: [],   // 隨浪起伏的船 { obj, baseY, phase, amp }
+  torches: [],   // 火炬粒子特效（TorchFireFX，重建環境時須 dispose）
 };
 
 export function createWorld(canvas, envId = 'hulao') {
@@ -47,6 +49,7 @@ export function createWorld(canvas, envId = 'hulao') {
   camera.lookAt(0, 2, -8);
 
   addLights(scene);
+  initSkillFX(scene);   // 技能/環境粒子（火炬火焰在 buildEnvironment 就會用到）
   buildEnvironment(scene, envId);
 
   return { renderer, scene, camera };
@@ -59,6 +62,8 @@ export function buildEnvironment(scene, envId) {
     disposeTree(envRoot);
   }
   if (scene.background && scene.background.dispose) scene.background.dispose();
+  for (const t of envFx.torches) t.dispose();   // 火炬粒子須自合批渲染器移除
+  envFx.torches.length = 0;
   envFx.fires.length = 0;
   envFx.waters.length = 0;
   envFx.bobbers.length = 0;
@@ -69,11 +74,15 @@ export function buildEnvironment(scene, envId) {
   if (envId === 'chibi') {
     scene.fog = new THREE.Fog(0x5a6a80, 50, 150);
     scene.background = makeChibiSky();
+    scene.backgroundRotation.set(0, 0, 0);
     buildChibi(envRoot);
   } else {
     // 遠方霧氣與天色相融，營造關隘的縱深
-    scene.fog = new THREE.Fog(0xbfae90, 46, 120);
-    scene.background = makeSkyTexture();
+    scene.fog = new THREE.Fog(0xc2a892, 46, 120);
+    // 黎明山景全景照（Poly Haven「kiara_1_dawn」，CC0）：
+    // 城牆後可見晨光與山稜線；旋轉角把全景中的日出光暈轉到城牆正後方
+    scene.background = loadSkyPano('textures/sky/hulao.jpg');
+    scene.backgroundRotation.set(0, 1.95, 0);
     buildGround(envRoot);
     buildCliffs(envRoot);
     buildPass(envRoot);
@@ -137,53 +146,12 @@ function addLights(scene) {
   scene.add(fill);
 }
 
-// ---------- 天空（漸層 + 太陽 + 雲 + 遠山剪影）----------
-function makeSkyTexture() {
-  const c = document.createElement('canvas');
-  c.width = 1024; c.height = 512;
-  const g = c.getContext('2d');
-
-  const sky = g.createLinearGradient(0, 0, 0, 512);
-  sky.addColorStop(0, '#5b7fb0');
-  sky.addColorStop(0.45, '#9fb4c8');
-  sky.addColorStop(0.72, '#e7d7b6');
-  sky.addColorStop(1, '#efe0c0');
-  g.fillStyle = sky;
-  g.fillRect(0, 0, 1024, 512);
-
-  // 太陽光暈
-  const sun = g.createRadialGradient(300, 150, 10, 300, 150, 220);
-  sun.addColorStop(0, 'rgba(255,244,214,0.95)');
-  sun.addColorStop(0.3, 'rgba(255,232,180,0.55)');
-  sun.addColorStop(1, 'rgba(255,232,180,0)');
-  g.fillStyle = sun;
-  g.fillRect(0, 0, 1024, 400);
-
-  // 雲層
-  g.globalAlpha = 0.9;
-  for (let i = 0; i < 26; i++) {
-    const x = (i * 173) % 1024;
-    const y = 40 + (i * 71) % 230;
-    const w = 90 + (i * 53) % 160;
-    const h = 22 + (i * 29) % 34;
-    const cloud = g.createRadialGradient(x, y, 4, x, y, w);
-    const a = 0.16 + ((i * 37) % 30) / 160;
-    cloud.addColorStop(0, `rgba(255,255,255,${a})`);
-    cloud.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = cloud;
-    g.beginPath();
-    g.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.globalAlpha = 1;
-
-  // 遠山剪影
-  drawRidge(g, 360, 'rgba(120,132,148,0.6)', 55);
-  drawRidge(g, 392, 'rgba(96,108,124,0.75)', 80);
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+// ---------- 天空：等距柱狀全景照（虎牢關用）----------
+function loadSkyPano(url) {
+  const t = loader.load(url);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function drawRidge(g, baseY, color, height) {
@@ -288,8 +256,9 @@ function jitter(geo, amt) {
 
 // ---------- 虎牢關城牆 + 關門 + 城樓 ----------
 function buildPass(scene) {
-  const wallMat = pbrMat('wall', 8, 2.4, { roughness: 0.95 });
-  const wallMatV = pbrMat('wall', 2.4, 2.4, { roughness: 0.95 });
+  // wall2 = 風化石板牆（貼圖比例 2:1，repeat 依牆面比例配置避免拉伸）
+  const wallMat = pbrMat('wall2', 6, 2.7, { roughness: 0.95 });
+  const wallMatV = pbrMat('wall2', 2.4, 1.4, { roughness: 0.95 });
   const woodMat = pbrMat('wood', 2, 3, { roughness: 0.9 });
   const stoneDark = new THREE.MeshStandardMaterial({ color: 0x35302a, roughness: 1 });
 
@@ -579,15 +548,15 @@ function buildProps(scene) {
     scene.add(makeBrazier(x, GATE_Z + 4));
   }
 
-  // 通道旁的三國旗幟
+  // 通道旁的三國旗幟（布旗貼圖：魏藍 / 蜀紅 / 吳綠 / 呂紫）
   const flags = [
-    { char: '魏', color: '#2a5bb2', x: -20 },
-    { char: '蜀', color: '#b23a2a', x: -12 },
-    { char: '吳', color: '#2a9a5b', x: 12 },
-    { char: '呂', color: '#6a2ac0', x: 20 },
+    { img: 'textures/img/wei.png', x: -20 },
+    { img: 'textures/img/shu.png', x: -12 },
+    { img: 'textures/img/wu.png', x: 12 },
+    { img: 'textures/img/lu.png', x: 20 },
   ];
   for (const f of flags) {
-    const banner = makeBanner(f.char, f.color);
+    const banner = makeImgBanner(f.img);
     banner.position.set(f.x, 0, FIELD.minZ - 4);
     scene.add(banner);
   }
@@ -619,17 +588,36 @@ function makeBrazier(x, z) {
   bowl.position.y = 2.6;
   g.add(bowl);
 
-  const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.6, 1.6, 10),
-    new THREE.MeshBasicMaterial({ color: 0xff8a2a })
-  );
-  flame.position.y = 3.6;
-  g.add(flame);
-
-  // 只保留自發光火焰（不放 PointLight，避免每個片元多算一盞燈的成本）
-  envFx.fires.push({ flame, phase: Math.random() * 6 });
+  // 火焰改用 quarks 粒子（不放 PointLight，避免每個片元多算一盞燈的成本）
+  const fire = new TorchFireFX(g);
+  fire.root.position.y = 2.95;   // 火盆口
+  envFx.torches.push(fire);
 
   g.position.set(x, 0, z);
+  return g;
+}
+
+// 虎牢關軍旗：使用現成布旗貼圖（textures/img/lu|shu|wei|wu.png）。
+// 原圖為 512² 方形、字在正中央偏小；以 UV repeat/offset 裁切中央直式
+// 區域（比例對齊 2.4×4.4 旗面），把字放大到約旗寬六成。
+function makeImgBanner(url) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x3a2a12, roughness: 1 })
+  );
+  pole.position.y = 4;
+  pole.castShadow = true;
+  g.add(pole);
+
+  const tex = loadTex(url, 0.32, 0.58, true);   // repeat = 裁切範圍（字約佔旗寬八成）
+  tex.offset.set(0.34, 0.195);                  // 對準字的中心
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 4.4),
+    new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.9 })
+  );
+  flag.position.set(1.4, 5.4, 0);
+  g.add(flag);
   return g;
 }
 
@@ -1070,6 +1058,9 @@ function makeChain(from, to) {
 
 // 環境動態特效（由 main 的迴圈每幀呼叫）：火焰閃動、水面流動、船身起伏
 export function updateSceneFx(dt, t) {
+  // 技能/環境粒子統一在此推進：主迴圈每幀都會呼叫本函式（含開始畫面
+  // 與暫停演出期間），火炬因此持續燃燒，大招/法術粒子也不需另行更新。
+  updateSkillFX(dt);
   for (const f of envFx.fires) {
     f.flame.scale.y = 0.9 + Math.sin(t * 12 + f.phase) * 0.15;
     f.flame.rotation.y += dt * 3;

@@ -88,8 +88,11 @@ function additiveMat(map) {
 const burst = (time, count) =>
   ({ time, count: new ConstantValue(count), cycle: 1, interval: 1, probability: 1 });
 
-// ---------- 初始化 / 每幀更新（main.js 呼叫）----------
+// ---------- 初始化 / 每幀更新 ----------
+// 於 createWorld 建立場景時初始化（環境火炬也用粒子，須早於 buildEnvironment）；
+// 每幀由 scene.js 的 updateSceneFx 推進（不受暫停/開始畫面影響，火炬持續燃燒）。
 export function initSkillFX(scene) {
+  if (batch) return;   // 已初始化
   sceneRef = scene;
   batch = new BatchedRenderer();
   scene.add(batch);
@@ -106,10 +109,10 @@ export function updateSkillFX(dt) {
 
 // ---------- 效果基底：管理一組粒子系統的掛載與回收 ----------
 class FXGroup {
-  constructor() {
+  constructor(parent) {
     this.systems = [];
     this.root = new THREE.Group();
-    sceneRef.add(this.root);
+    (parent || sceneRef).add(this.root);
   }
 
   add(sys) {
@@ -357,6 +360,59 @@ export class TornadoFX extends FXGroup {
     )));
     dust.emitter.position.y = 0.08;
     this.add(dust);
+
+    this.ready();
+  }
+}
+
+// ---------- 環境火炬 / 烽火盆火焰（持續燃燒）----------
+// 兩層循環粒子：竄升收窄的焰心＋零星飄起的火星。
+// 所有火炬共用同一材質與渲染模式，全場火焰合批為一個 draw call。
+export class TorchFireFX extends FXGroup {
+  // parent：火炬模型群組；root 由呼叫端定位到火盆口
+  constructor(parent) {
+    super(parent);
+
+    // 焰心：向上竄升、由白黃轉橘紅並縮小消失
+    const flame = new ParticleSystem({
+      duration: 1, looping: true, worldSpace: false,
+      startLife: new IntervalValue(0.4, 0.65),
+      startSpeed: new IntervalValue(1.8, 2.8),
+      startSize: new IntervalValue(0.55, 0.95),
+      startColor: new ConstantColor(new QV4(1, 0.78, 0.35, 0.95)),
+      emissionOverTime: new ConstantValue(24),
+      shape: new ConeEmitter({ radius: 0.32, angle: 0.25, thickness: 1 }),
+      material: M.glow,
+      renderMode: RenderMode.BillBoard,
+      renderOrder: 2,
+    });
+    flame.addBehavior(new ColorOverLife(new Gradient(
+      [[new QV3(1, 0.95, 0.7), 0], [new QV3(1, 0.55, 0.12), 0.45], [new QV3(0.85, 0.2, 0.03), 1]],
+      [[0.95, 0], [0.85, 0.6], [0, 1]]
+    )));
+    flame.addBehavior(new SizeOverLife(new PiecewiseBezier([[new Bezier(1, 0.8, 0.5, 0.15), 0]])));
+    flame.emitter.rotation.x = -Math.PI / 2;   // 朝上發射
+    this.add(flame);
+
+    // 火星：偶發飄起的小亮點，微側漂
+    const sparks = new ParticleSystem({
+      duration: 1, looping: true, worldSpace: false,
+      startLife: new IntervalValue(0.5, 0.9),
+      startSpeed: new IntervalValue(2.4, 4.2),
+      startSize: new IntervalValue(0.05, 0.12),
+      startColor: new ConstantColor(new QV4(1, 0.72, 0.28, 1)),
+      emissionOverTime: new ConstantValue(7),
+      shape: new ConeEmitter({ radius: 0.2, angle: 0.5, thickness: 1 }),
+      material: M.glow,
+      renderMode: RenderMode.BillBoard,
+      renderOrder: 2,
+    });
+    sparks.addBehavior(new ColorOverLife(new Gradient(
+      [[new QV3(1, 0.85, 0.5), 0], [new QV3(0.9, 0.3, 0.05), 1]],
+      [[1, 0], [0.9, 0.5], [0, 1]]
+    )));
+    sparks.emitter.rotation.x = -Math.PI / 2;
+    this.add(sparks);
 
     this.ready();
   }
