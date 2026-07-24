@@ -10,6 +10,7 @@ import { UltimateManager } from './ultimates.js';
 import { BossShow, hasBossShow } from './bossshow.js';
 import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
+import { HitFX } from './hitfx.js';
 import { CHARACTERS } from './characters.js';
 import { DevPanel } from './dev.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
@@ -48,6 +49,7 @@ const ui = new UI(state);
 
 const enemyMgr = new EnemyManager(scene, currentScene);
 const bulletMgr = new BulletManager(scene);
+const hitFX = new HitFX(scene);   // 擊中粒子特效（three.quarks 物件池）
 
 // ---------- 場景故事性：鎮守 Boss 名牌 / 台詞、場景標示 ----------
 const bossPlate = new BossPlate(ui.el.root, currentScene.boss);
@@ -171,7 +173,7 @@ const summons = new SummonManager(scene, enemyMgr, {
 // 援軍命中傷害：沿用擊殺獎勵（以玩家目前下注計獎），入袋並演出金幣/浮字
 function summonDealDamage(enemy, power, hitPos) {
   if (!enemy || enemy.dead || enemy.removed) return false;
-  spawnSpark(hitPos);
+  hitFX.spawn(hitPos);
   const killed = enemy.hit(power);
   if (!killed) return false;
   const reward = Math.floor(ui.bet * enemy.value);
@@ -334,7 +336,7 @@ function attemptSlash(enemy) {
   ui.refresh();
   rollUltimate();   // 近戰每刀小機率觸發大招
 
-  spawnSpark(enemy.mesh.position.clone().setY(1.6));
+  hitFX.spawn(enemy.mesh.position.clone().setY(1.6));
   const power = 1 + Math.floor(ui.betIndex / 2); // 下注越高、刀傷越高
   const killed = enemy.hit(power);
   if (killed) {
@@ -352,7 +354,7 @@ function attemptSlash(enemy) {
 
 // ---------- 命中處理（左右 AI 遠程砲彈）----------
 function onHit(enemy, bullet, hitPos) {
-  spawnSpark(hitPos);
+  hitFX.spawn(hitPos);
   const killed = enemy.hit(bullet.power);
   if (!killed) return;
 
@@ -404,20 +406,6 @@ function presentBossDeath(enemy, reward, catcher, byPlayer) {
 }
 
 // ---------- 特效 ----------
-// 火花共用單一幾何體與材質，避免每次命中都配置新資源
-const SPARK_GEO = new THREE.SphereGeometry(0.18, 6, 6);
-const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffe27a });
-const sparks = [];
-function spawnSpark(pos) {
-  for (let i = 0; i < 5; i++) {
-    const m = new THREE.Mesh(SPARK_GEO, SPARK_MAT);
-    m.position.copy(pos);
-    const v = new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 5, (Math.random() - 0.5) * 6);
-    scene.add(m);
-    sparks.push({ mesh: m, v, life: 0.4 });
-  }
-}
-
 const coins = [];
 function burstCoins(pos) {
   for (let i = 0; i < 8; i++) {
@@ -429,22 +417,15 @@ function burstCoins(pos) {
   }
 }
 
-// 清空火花與金幣特效（換房重建時用）
+// 清空擊中粒子與金幣特效（換房重建時用）
 function clearEffects() {
-  for (const s of sparks) scene.remove(s.mesh);
-  sparks.length = 0;
+  hitFX.clear();
   for (const c of coins) scene.remove(c.mesh);
   coins.length = 0;
 }
 
 function updateEffects(dt) {
-  for (let i = sparks.length - 1; i >= 0; i--) {
-    const s = sparks[i];
-    s.mesh.position.addScaledVector(s.v, dt);
-    s.v.y -= 14 * dt;
-    s.life -= dt;
-    if (s.life <= 0) { scene.remove(s.mesh); sparks.splice(i, 1); }
-  }
+  hitFX.update(dt);
   for (let i = coins.length - 1; i >= 0; i--) {
     const c = coins[i];
     c.mesh.position.addScaledVector(c.v, dt);
@@ -560,7 +541,7 @@ function showSceneBanner() {
 // 供主控台除錯 / 自動化測試使用
 window.__game = {
   hero, playerArcher, enemyMgr, ui, camera, bossPlate, bossShow, scene, roomSelect, recruit,
-  summons, bulletMgr, sparks, coins,
+  summons, bulletMgr, hitFX, coins,
   rebuildBattlefield, runRoomTransition,
   get currentScene() { return currentScene; },
   get activeCharType() { return activeCharType; },

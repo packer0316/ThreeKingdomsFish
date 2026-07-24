@@ -9,6 +9,25 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 const BASE = import.meta.env.BASE_URL || '/';
 const FBX_URL = BASE + 'models/soldier_normal/Meshy_AI_Three_Kingdoms_Soldie_biped_Meshy_AI_Meshy_Merged_Animations.fbx';
 const TEX_URL = BASE + 'models/soldier_normal/Meshy_AI_Three_Kingdoms_Soldie_biped_texture_0.png';
+// 中階小兵（頭上有官銜稱號的菁英）專用 UV 貼圖；共用同一副 FBX 骨架/UV，只換貼圖。
+const MID_TEX_URL = BASE + 'models/soldier_normal/mid soldier.png';
+const MID_SCALE = 1.5;   // 中階小兵在一般小兵基礎上再放大的倍率
+
+// 中階貼圖只載入一次；UV 方向 / 包裹方式沿用原貼圖，確保貼圖對位一致。
+let midTex = null;
+function getMidTexture(sample) {
+  if (!midTex) {
+    midTex = new THREE.TextureLoader().load(encodeURI(MID_TEX_URL));
+    midTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  if (sample) {
+    midTex.flipY = sample.flipY;
+    midTex.wrapS = sample.wrapS;
+    midTex.wrapT = sample.wrapT;
+    midTex.needsUpdate = true;
+  }
+  return midTex;
+}
 
 const SOLDIER_HEIGHT = 3.3;   // 正規化後的世界高度（與原程序化小兵相近）
 const MODEL_YAW = 0;          // 若模型正面方向不對，調整此偏移（弧度）
@@ -70,7 +89,7 @@ export function preloadSoldier() {
         if (!template.knockClip) console.warn('[soldier] 找不到 Knock_Down 動作，現有：', (fbx.animations || []).map((a) => a.name));
 
         resolve(template);
-        for (const w of waiters) w(build());
+        for (const w of waiters) w.onReady(build(w.opts));
         waiters.length = 0;
       },
       undefined,
@@ -81,11 +100,13 @@ export function preloadSoldier() {
 }
 
 // 從模板複製一隻可動小兵：{ model, mixer, actions:{walk,knock} }
-function build() {
+function build(opts = {}) {
+  const elite = !!opts.elite;   // 中階小兵：換 mid soldier 貼圖並放大 MID_SCALE 倍
   const t = template;
   const model = cloneSkeleton(t.object);
-  model.scale.setScalar(t.scale);
-  model.position.set(-t.center.x * t.scale, -t.min.y * t.scale + FOOT_LIFT, -t.center.z * t.scale);
+  const sc = t.scale * (elite ? MID_SCALE : 1);
+  model.scale.setScalar(sc);
+  model.position.set(-t.center.x * sc, -t.min.y * sc + FOOT_LIFT, -t.center.z * sc);
   model.rotation.y = MODEL_YAW;
 
   // 每隻小兵各自建立材質（避免共用 → 一隻受擊反紅全體跟著紅）；
@@ -93,7 +114,9 @@ function build() {
   const toLambert = (m) => {
     // Meshy 匯出常用 MatCap 材質（不受光、偏亮）：改成受光的 Lambert，
     // 貼圖可能掛在 .map 或 .matcap，取其一當作固有色貼圖。
-    const tex = m ? (m.map || m.matcap || m.emissiveMap || null) : null;
+    const orig = m ? (m.map || m.matcap || m.emissiveMap || null) : null;
+    // 中階小兵改用 mid soldier 貼圖（沿用原貼圖的 UV 方向與包裹設定）。
+    const tex = elite && orig ? getMidTexture(orig) : orig;
     if (tex) tex.colorSpace = THREE.SRGBColorSpace;
     const lm = new THREE.MeshLambertMaterial({
       map: tex,
@@ -118,9 +141,9 @@ function build() {
 
 // 取得一隻小兵實例；回呼一律延後到微任務（避免在 Enemy 建構子中同步執行，
 // 造成建構子本體把回呼設定的狀態覆蓋）
-export function spawnSoldier(onReady) {
-  if (template) { queueMicrotask(() => onReady(build())); return; }
-  waiters.push(onReady);
+export function spawnSoldier(onReady, opts = {}) {
+  if (template) { queueMicrotask(() => onReady(build(opts))); return; }
+  waiters.push({ onReady, opts });
   preloadSoldier();
 }
 

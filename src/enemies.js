@@ -32,7 +32,9 @@ export class Enemy {
     this.name = def.name || def.label;
     this.dead = false;
     this.removed = false;   // 已離場（走出邊界或被擊殺移除）
-    this.title = null;      // 官銜（菁英小兵，由 EnemyManager 指派）
+    // 官銜（有名字的中階菁英小兵）：由 EnemyManager 在生成前指派，
+    // 決定小兵是否改用 mid soldier 貼圖並放大。
+    this.title = opts.title || null;
 
     // 動畫狀態（一般小兵使用 FBX + AnimationMixer；Boss 仍為程序化模型）
     this.mixer = null;
@@ -53,7 +55,8 @@ export class Enemy {
     } else if (isBoss) {
       this.mesh = makeBoss(def);
     } else {
-      // 小兵改用共用 FBX 模型：先放空群組佔位，載好後掛入並播放 Walking
+      // 小兵改用共用 FBX 模型：先放空群組佔位，載好後掛入並播放 Walking。
+      // 中階菁英小兵（有官銜）改用 mid soldier 貼圖並放大 2 倍。
       this.mesh = new THREE.Group();
       spawnSoldier((inst) => {
         if (this.removed) return;
@@ -67,7 +70,13 @@ export class Enemy {
           a.time = Math.random() * (a.getClip().duration || 1);   // 錯開步伐避免整齊劃一
           a.play();
         }
-      });
+      }, { elite: !!this.title });
+    }
+    // 中階菁英小兵：頭上掛官銜稱號牌（放大 2 倍後頭頂更高，稱號牌一併上移）
+    if (this.title) {
+      const label = makeTitleLabel(this.title);
+      label.position.y = 5.6;
+      this.mesh.add(label);
     }
     this.mesh.userData.enemy = this;   // 供點擊射線反查敵人物件
 
@@ -97,8 +106,9 @@ export class Enemy {
     this.wanderAmp = 0.8 + Math.random() * 1.6;
     this.speedWobble = Math.random() * Math.PI * 2;
 
-    // 碰撞半徑（世界座標，供命中判定）
-    this.radius = (isBoss ? 2.2 : 1.1) * (def.scale || 1);
+    // 碰撞半徑（世界座標，供命中判定）；中階菁英放大 2 倍，判定半徑一併加大
+    const baseR = isBoss ? 2.2 : (this.title ? 1.65 : 1.1);
+    this.radius = baseR * (def.scale || 1);
   }
 
   update(dt) {
@@ -440,7 +450,7 @@ export class EnemyManager {
   // 讓一隻小兵說話（頭上掛對話泡泡，duration 秒後收回）
   saySoldier(enemy, text, duration = 3.2) {
     const sprite = makeSpeechBubble(text);
-    sprite.position.y = enemy.title ? 5.05 : 4.15;   // 有稱號牌時泡泡再往上疊
+    sprite.position.y = enemy.title ? 6.4 : 4.15;   // 中階菁英放大 1.5 倍且有稱號牌，泡泡再往上疊
     enemy.mesh.add(sprite);
     this.speakers.push({ enemy, sprite, t: duration });
   }
@@ -540,19 +550,18 @@ export class EnemyManager {
     this.chatterTimer = 6 + Math.random() * 4;   // 驚呼後停一陣子再恢復閒談
   }
 
-  // 新生小兵有機率取得一個尚未使用的官銜（頭上掛稱號牌）
-  maybeAssignTitle(e) {
-    if (this.eliteTitles.length === 0) return;
-    if (Math.random() >= this.eliteChance) return;
+  // 新生小兵有機率取得一個尚未使用的官銜（回傳官銜字串，否則 null）。
+  // 需在建構 Enemy「之前」決定，好讓中階菁英小兵改用 mid soldier 貼圖並放大。
+  takeTitle() {
+    if (this.eliteTitles.length === 0) return null;
+    if (Math.random() >= this.eliteChance) return null;
     const i = (Math.random() * this.eliteTitles.length) | 0;
-    const title = this.eliteTitles.splice(i, 1)[0];
-    e.title = title;
-    e.mesh.add(makeTitleLabel(title));
+    return this.eliteTitles.splice(i, 1)[0];
   }
 
   spawn(def, isBoss = false, opts = {}) {
-    const e = new Enemy(def, isBoss, opts);
-    if (!isBoss) this.maybeAssignTitle(e);
+    const title = isBoss ? null : this.takeTitle();
+    const e = new Enemy(def, isBoss, { ...opts, title });
     this.scene.add(e.mesh);
     this.enemies.push(e);
     return e;
