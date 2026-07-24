@@ -418,6 +418,92 @@ export class TorchFireFX extends FXGroup {
   }
 }
 
+// ---------- 近戰武將衝刺拖尾（塵光＋速度線）----------
+// 兩層循環粒子跟著武將移動（世界空間，粒子留在身後形成拖尾）：
+//   塵光：腳下揚起的暖色光塵，上飄並縮小
+//   速度線：自軀幹向後噴出的拉伸光條，強化衝刺速度感
+// 以可變的發射率開關（衝刺中 > 0，停下歸零），粒子平滑收尾不突兀。
+export class DashTrailFX extends FXGroup {
+  constructor(color = 0xffb84d) {
+    super();
+    this._dustRate = new ConstantValue(0);
+    this._streakRate = new ConstantValue(0);
+    this._dustColor = new QV4(1, 0.85, 0.55, 0.65);
+    this._streakColor = new QV4(1, 0.95, 0.8, 0.9);
+
+    const dust = new ParticleSystem({
+      duration: 1, looping: true, worldSpace: true,
+      startLife: new IntervalValue(0.3, 0.55),
+      startSpeed: new IntervalValue(0.8, 2.0),
+      startSize: new IntervalValue(0.28, 0.6),
+      startColor: new ConstantColor(this._dustColor),
+      emissionOverTime: this._dustRate,
+      shape: new SphereEmitter({ radius: 0.5 }),
+      material: M.glow,
+      renderMode: RenderMode.BillBoard,
+      renderOrder: 2,
+    });
+    dust.addBehavior(new ApplyForce(new QV3(0, 1, 0), new ConstantValue(2.6)));
+    dust.addBehavior(new SizeOverLife(new PiecewiseBezier([[new Bezier(1, 0.85, 0.55, 0.1), 0]])));
+    dust.addBehavior(new ColorOverLife(new Gradient(
+      [[new QV3(1, 1, 1), 0], [new QV3(1, 0.72, 0.35), 1]],
+      [[0.9, 0], [0.6, 0.5], [0, 1]]
+    )));
+    dust.emitter.position.y = 0.45;
+    this.add(dust);
+
+    const streaks = new ParticleSystem({
+      duration: 1, looping: true, worldSpace: true,
+      startLife: new IntervalValue(0.22, 0.38),
+      startSpeed: new IntervalValue(6, 10),
+      startSize: new IntervalValue(0.1, 0.18),
+      startColor: new ConstantColor(this._streakColor),
+      emissionOverTime: this._streakRate,
+      shape: new ConeEmitter({ radius: 0.55, angle: 0.22, thickness: 1 }),
+      material: M.glow,
+      renderMode: RenderMode.StretchedBillBoard,
+      rendererEmitterSettings: { speedFactor: 0.05, lengthFactor: 3 },
+      renderOrder: 2,
+    });
+    streaks.addBehavior(new ColorOverLife(new Gradient(
+      [[new QV3(1, 1, 1), 0], [new QV3(1, 0.8, 0.45), 1]],
+      [[1, 0], [0, 1]]
+    )));
+    streaks.emitter.position.y = 1.5;
+    streaks.emitter.rotation.y = Math.PI;   // 朝武將背後噴出
+    this.add(streaks);
+
+    this.setColor(color);
+    this.ready();
+  }
+
+  // 依武將殘影色調整拖尾色（保留亮度往白偏，避免過濃）
+  setColor(hex) {
+    const c = new THREE.Color(hex);
+    this._dustColor.x = (c.r + 1) / 2;
+    this._dustColor.y = (c.g + 1) / 2;
+    this._dustColor.z = (c.b + 1) / 2;
+    this._streakColor.x = (c.r + 2) / 3;
+    this._streakColor.y = (c.g + 2) / 3;
+    this._streakColor.z = (c.b + 2) / 3;
+  }
+
+  // 每幀呼叫：跟隨武將位置與朝向；sprinting 控制發射開關
+  follow(pos, facing, sprinting) {
+    this.root.position.copy(pos);
+    this.root.rotation.y = facing;
+    this._dustRate.value = sprinting ? 45 : 0;
+    this._streakRate.value = sprinting ? 32 : 0;
+  }
+
+  // 立即清掉在場粒子（換房 / 切換角色時用）
+  clearParticles() {
+    this._dustRate.value = 0;
+    this._streakRate.value = 0;
+    for (const s of this.systems) s.particles.length = 0;
+  }
+}
+
 // ---------- 援軍（書）：落雷閃擊 ----------
 // 一次性：天頂劈下的拉伸光束＋落點閃光＋四散電花＋地面衝擊環。
 export class LightningFX extends FXGroup {

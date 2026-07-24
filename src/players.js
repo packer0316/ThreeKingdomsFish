@@ -4,6 +4,7 @@ import { makeArcherGeneral } from './models.js';
 import { spawnHuangzhong } from './huangzhongModel.js';
 import { loadCharacter, CHARACTERS } from './characters.js';
 import { FIELD, BET_LEVELS, GENERALS } from './config.js';
+import { DashTrailFX } from './skillfx.js';
 
 // 讓一根預設沿 Y 軸、單位長度的圓柱在 a、b 兩點之間拉伸對齊（用於弓弦）
 const _up = new THREE.Vector3(0, 1, 0);
@@ -372,22 +373,12 @@ const LUBU_TARGET_HEIGHT = 4.5;   // 模型正規化後的世界高度
 const LUBU_MODEL_YAW = 0;         // 模型正面若非 +Z，可在此加上旋轉修正
 const ULT_EVERY = 8;              // 每累積 N 次揮刀施放一次大絕招
 
-// 衝刺特效參數
-const GHOST_COUNT = 6;            // 殘影池大小
-const GHOST_LIFE = 0.32;          // 殘影淡出秒數
-const GHOST_INTERVAL = 0.07;      // 衝刺時的殘影生成間隔
-const DUST_LIFE = 0.38;           // 塵光粒子壽命
+// 衝刺特效參數：殘影更密、更持久，淡出用二次緩出曲線（滑順）；
+// 塵光/速度線改用 three.quarks 粒子（DashTrailFX），不再逐顆操作 mesh。
+const GHOST_COUNT = 10;           // 殘影池大小
+const GHOST_LIFE = 0.42;          // 殘影淡出秒數
+const GHOST_INTERVAL = 0.045;     // 衝刺時的殘影生成間隔
 const DASH_TRIGGER_DIST = 6;      // 距離目標超過此值才觸發衝刺（貼身跟隨不衝刺）
-
-// 衝刺粒子共用資源（避免每顆粒子各自配置幾何體/材質）
-const DUST_GEO = new THREE.SphereGeometry(0.16, 6, 6);
-const DUST_MAT = new THREE.MeshBasicMaterial({
-  color: 0xffd98a,
-  transparent: true,
-  opacity: 0.55,
-  depthWrite: false,
-  blending: THREE.AdditiveBlending,
-});
 
 // Box3.setFromObject 仍會納入 visible=false 的節點，需自行排除已關閉的赤兔馬。
 function visibleBounds(root) {
@@ -492,13 +483,12 @@ export class MeleeGeneral {
     this.target = null;          // 目前攻擊中的敵人
     this.selected = null;        // 玩家點選鎖定的敵人（永遠優先攻擊）
 
-    // 衝刺特效狀態：殘影池 + 塵光粒子
+    // 衝刺特效狀態：殘影池 + 拖尾粒子（塵光/速度線）
     this.model = null;
     this.ghosts = [];
     this.ghostSrcNodes = [];
     this.ghostTimer = 0;
-    this.dust = [];
-    this.dustTimer = 0;
+    this.trail = new DashTrailFX(this.character.ghostColor);
 
     // 鎖定目標的地面紅圈（細底環 + 兩段旋轉亮弧，較先前更細更收斂）
     this.targetRingMat = new THREE.MeshBasicMaterial({
@@ -576,6 +566,7 @@ export class MeleeGeneral {
   async setCharacter(def) {
     if (!def || (this.character && this.character.id === def.id)) return;
     this.character = def;
+    this.trail.setColor(def.ghostColor || 0xffb84d);   // 拖尾隨殘影色調整
     this.ready = false;
     this.holdTimer = 0;
     this.ultLock = 0;
@@ -631,8 +622,7 @@ export class MeleeGeneral {
       g.life = 0;
       if (g.mat) g.mat.opacity = 0;
     }
-    for (const p of this.dust) this.scene.remove(p.mesh);
-    this.dust.length = 0;
+    this.trail.clearParticles();
     this.selected = null;
     this.target = null;
     this.holdTimer = 0;
@@ -646,14 +636,13 @@ export class MeleeGeneral {
       this.selected = null;
       this.target = null;
       if (this.targetRing) this.targetRing.visible = false;
-      // 立即回收衝刺殘影與塵光，避免切換角色後殘留在場上
+      // 立即回收衝刺殘影與拖尾，避免切換角色後殘留在場上
       for (const g of this.ghosts) {
         g.root.visible = false;
         g.life = 0;
         if (g.mat) g.mat.opacity = 0;
       }
-      for (const p of this.dust) this.scene.remove(p.mesh);
-      this.dust.length = 0;
+      this.trail.clearParticles();
     }
   }
 
@@ -716,29 +705,11 @@ export class MeleeGeneral {
       dst.scale.copy(src.scale);
     }
     g.life = GHOST_LIFE;
-    g.mat.opacity = 0.4;
+    g.mat.opacity = 0.45;
     g.root.visible = true;
   }
 
-  // 足下塵光：拖在衝刺方向的後方
-  spawnDust() {
-    const back = new THREE.Vector3(-Math.sin(this.facing), 0, -Math.cos(this.facing));
-    for (let i = 0; i < 2; i++) {
-      const m = new THREE.Mesh(DUST_GEO, DUST_MAT);
-      m.position.copy(this.mesh.position);
-      m.position.x += (Math.random() - 0.5) * 0.8;
-      m.position.z += (Math.random() - 0.5) * 0.8;
-      m.position.y = 0.25 + Math.random() * 0.9;
-      const v = back.clone().multiplyScalar(2 + Math.random() * 3);
-      v.x += (Math.random() - 0.5) * 1.5;
-      v.z += (Math.random() - 0.5) * 1.5;
-      v.y = 0.4 + Math.random() * 0.8;
-      this.scene.add(m);
-      this.dust.push({ mesh: m, v, life: DUST_LIFE });
-    }
-  }
-
-  // 衝刺特效：衝刺中持續產生殘影與塵光，並更新既有粒子的淡出
+  // 衝刺特效：衝刺中持續產生殘影，拖尾粒子（塵光/速度線）由發射率開關
   updateSprintFx(dt, sprinting) {
     if (sprinting) {
       this.ghostTimer -= dt;
@@ -746,15 +717,12 @@ export class MeleeGeneral {
         this.ghostTimer = GHOST_INTERVAL;
         this.spawnGhost();
       }
-      this.dustTimer -= dt;
-      if (this.dustTimer <= 0) {
-        this.dustTimer = 0.05;
-        this.spawnDust();
-      }
     } else {
       this.ghostTimer = 0;
-      this.dustTimer = 0;
     }
+
+    // 拖尾粒子跟著武將；停止衝刺時發射率歸零，殘餘粒子自然收尾
+    this.trail.follow(this.mesh.position, this.facing, sprinting);
 
     for (const g of this.ghosts) {
       if (g.life <= 0) continue;
@@ -763,21 +731,9 @@ export class MeleeGeneral {
         g.root.visible = false;
         g.mat.opacity = 0;
       } else {
-        g.mat.opacity = (g.life / GHOST_LIFE) * 0.4;
+        const k = g.life / GHOST_LIFE;
+        g.mat.opacity = k * k * 0.45;   // 二次緩出：亮 → 快速轉淡 → 緩慢消失
       }
-    }
-
-    for (let i = this.dust.length - 1; i >= 0; i--) {
-      const p = this.dust[i];
-      p.life -= dt;
-      if (p.life <= 0) {
-        this.scene.remove(p.mesh);
-        this.dust.splice(i, 1);
-        continue;
-      }
-      p.mesh.position.addScaledVector(p.v, dt);
-      p.v.y += 2.5 * dt;   // 塵光輕微上飄
-      p.mesh.scale.setScalar(0.5 + (p.life / DUST_LIFE) * 0.9);
     }
   }
 
