@@ -96,36 +96,50 @@ const TIME_MIN = 1;      // 小時（招募時長，越久稀有機率越高）
 const TIME_MAX = 24;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const RARITY_ORDER = ['SSR', 'SR', 'R', 'H'];
 
-// 依花費計算各稀有度權重：花越多，紅/金機率越高、白越低
-function weightsFor(cost) {
-  const f = clamp((cost - COST_MIN) / (COST_MAX - COST_MIN), 0, 1);
+// 機率格式：小數點後兩位、去掉多餘的 0（0.15 / 2.5 / 60）
+function fmtPct(v) {
+  return parseFloat(v.toFixed(2)).toString();
+}
+
+// 稀有度機率（現代抽卡設計：越強機率越低）。
+// 基礎值（最低花費/時長）：SSR 1.5% / SR 8% / R 30.5% / H 60%
+// 花費與時間越高，越往紅/金傾斜（H 下降），但 SSR 仍維持低機率。
+function rarityWeights(cost, hours) {
+  const cf = clamp((cost - COST_MIN) / (COST_MAX - COST_MIN), 0, 1);
+  const tf = clamp((hours - TIME_MIN) / (TIME_MAX - TIME_MIN), 0, 1);
+  const boost = cf * 0.7 + tf * 0.3;      // 綜合加成係數 0~1
   return {
-    SSR: 2 + f * 20,
-    SR:  10 + f * 22,
-    R:   28,
-    H:   60 - f * 42,
+    SSR: 1.5 + boost * 4.5,               // 1.5% → 6%
+    SR:  8 + boost * 17,                  // 8%  → 25%
+    R:   30.5 + boost * 4,                // 30.5% → 34.5%
+    H:   60 - boost * 25.5,               // 60% → 34.5%
   };
 }
 
-// 依時間額外微幅拉高稀有機率（時間越久，越可能翻出好貨）
-function pickRarity(cost, timeSec) {
-  const w = weightsFor(cost);
-  const tf = clamp((timeSec - TIME_MIN) / (TIME_MAX - TIME_MIN), 0, 1);
-  w.SSR *= 1 + tf * 0.6;
-  w.SR *= 1 + tf * 0.3;
-  const total = w.SSR + w.SR + w.R + w.H;
-  let roll = Math.random() * total;
-  for (const key of ['SSR', 'SR', 'R', 'H']) {
-    roll -= w[key];
+// 正規化為總和 1 的機率
+function rarityProbs(cost, hours) {
+  const w = rarityWeights(cost, hours);
+  const total = RARITY_ORDER.reduce((s, k) => s + w[k], 0);
+  const p = {};
+  for (const k of RARITY_ORDER) p[k] = w[k] / total;
+  return p;
+}
+
+function pickRarity(cost, hours) {
+  const p = rarityProbs(cost, hours);
+  let roll = Math.random();
+  for (const key of RARITY_ORDER) {
+    roll -= p[key];
     if (roll <= 0) return key;
   }
   return 'H';
 }
 
 // 隨機抽一名武將（先決定稀有度，再從該稀有度中隨機挑一人）
-function pickCharacter(cost, timeSec) {
-  const rarity = pickRarity(cost, timeSec);
+function pickCharacter(cost, hours) {
+  const rarity = pickRarity(cost, hours);
   const pool = byRarity(rarity);
   return pool[(Math.random() * pool.length) | 0];
 }
@@ -167,6 +181,8 @@ export class Recruit {
       ],
       result: document.getElementById('recruit-result'),
       coins: document.getElementById('recruit-coins'),
+      legend: document.getElementById('recruit-legend'),
+      rateList: document.getElementById('recruit-rate-list'),
       fx: document.getElementById('recruit-fx'),
       fxCards: document.getElementById('rfx-cards'),
       fxBanner: document.getElementById('rfx-banner'),
@@ -185,11 +201,53 @@ export class Recruit {
     });
     this.el.go.addEventListener('click', () => this.spin());
     this.el.fx.addEventListener('click', () => this.hideFx());
+    // 花費 / 時間 變動 → 即時更新顯示機率
+    this.el.cost.addEventListener('input', () => this.renderRates());
+    this.el.time.addEventListener('input', () => this.renderRates());
+  }
+
+  // 讀取目前輸入的花費/時間（夾在合法範圍內）
+  currentParams() {
+    const cost = clamp(Math.floor(Number(this.el.cost.value) || 0), COST_MIN, COST_MAX);
+    const hours = clamp(Math.floor(Number(this.el.time.value) || TIME_MIN), TIME_MIN, TIME_MAX);
+    return { cost, hours };
+  }
+
+  // 依目前花費/時間算出機率，渲染上方稀有度列與右側各武將機率
+  renderRates() {
+    const { cost, hours } = this.currentParams();
+    const probs = rarityProbs(cost, hours);
+
+    // 上方稀有度列（含總機率）
+    this.el.legend.innerHTML = RARITY_ORDER.map((r) => {
+      const info = RARITY[r];
+      return `<span class="recruit-legend-item rarity-${r}">` +
+        `<span class="legend-label"><i class="legend-dot"></i>${info.label} ${r}</span>` +
+        `<b>${fmtPct(probs[r] * 100)}%</b></span>`;
+    }).join('');
+
+    // 右側：依稀有度分組，列出每名武將的個別機率（= 該稀有度總機率 / 人數）
+    this.el.rateList.innerHTML = RARITY_ORDER.map((r) => {
+      const pool = byRarity(r);
+      const each = (probs[r] * 100) / pool.length;
+      const info = RARITY[r];
+      const rows = pool.map((c) =>
+        `<div class="rate-row rarity-${r}">` +
+          `<span class="rate-name">${c.name}</span>` +
+          `<span class="rate-pct">${fmtPct(each)}%</span></div>`
+      ).join('');
+      return `<div class="rate-group rarity-${r}">` +
+        `<div class="rate-group-head">${info.label} ${r}` +
+          `<span class="rate-group-sum">共 ${fmtPct(probs[r] * 100)}%</span></div>` +
+        rows +
+      `</div>`;
+    }).join('');
   }
 
   open() {
     this.el.btn.classList.add('active');
     this.refreshCoins();
+    this.renderRates();
     this.resetStrip();
     this.el.result.className = 'recruit-result';
     this.el.result.innerHTML = '';

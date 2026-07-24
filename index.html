@@ -51,44 +51,53 @@
     <!-- 招募系統彈窗 -->
     <div id="recruit-modal" class="hidden">
       <div class="recruit-panel">
+        <span class="recruit-corner tl"></span><span class="recruit-corner tr"></span>
+        <span class="recruit-corner bl"></span><span class="recruit-corner br"></span>
+
         <div class="recruit-head">
-          <span class="recruit-title">🎯 武將招募</span>
+          <span class="recruit-title">武 將 招 募</span>
           <span class="recruit-wallet">籌碼 <b id="recruit-coins">0</b></span>
           <button class="recruit-close" id="recruit-close">✕</button>
         </div>
 
-        <div class="recruit-legend">
-          <span class="rarity-SSR">名將 SSR</span>
-          <span class="rarity-SR">大將 SR</span>
-          <span class="rarity-R">良將 R</span>
-          <span class="rarity-H">普通 H</span>
-        </div>
+        <div class="recruit-body">
+          <!-- 主區：稀有度機率列 + 輪帶 + 設定 -->
+          <div class="recruit-main">
+            <div class="recruit-legend" id="recruit-legend"></div>
 
-        <!-- 老虎機輪帶（上下兩排，一次招募兩隻） -->
-        <div class="recruit-reel">
-          <div class="recruit-marker"></div>
-          <div class="recruit-strip" id="recruit-strip-0"></div>
-        </div>
-        <div class="recruit-reel">
-          <div class="recruit-marker"></div>
-          <div class="recruit-strip" id="recruit-strip-1"></div>
-        </div>
+            <!-- 老虎機輪帶（上下兩排，一次招募兩隻） -->
+            <div class="recruit-reel">
+              <div class="recruit-marker"></div>
+              <div class="recruit-strip" id="recruit-strip-0"></div>
+            </div>
+            <div class="recruit-reel">
+              <div class="recruit-marker"></div>
+              <div class="recruit-strip" id="recruit-strip-1"></div>
+            </div>
 
-        <div class="recruit-result" id="recruit-result"></div>
+            <div class="recruit-result" id="recruit-result"></div>
 
-        <!-- 兩個空格：花費 / 時間 -->
-        <div class="recruit-form">
-          <label class="recruit-field">
-            <span>花費籌碼</span>
-            <input type="number" id="recruit-cost" min="1000" max="200000" step="1000" value="10000" />
-          </label>
-          <label class="recruit-field">
-            <span>招募時間（小時）</span>
-            <input type="number" id="recruit-time" min="1" max="24" step="1" value="6" />
-          </label>
+            <!-- 兩個空格：花費 / 時間 -->
+            <div class="recruit-form">
+              <label class="recruit-field">
+                <span>花費籌碼</span>
+                <input type="number" id="recruit-cost" min="1000" max="200000" step="1000" value="10000" />
+              </label>
+              <label class="recruit-field">
+                <span>招募時間（小時）</span>
+                <input type="number" id="recruit-time" min="1" max="24" step="1" value="6" />
+              </label>
+            </div>
+
+            <button class="recruit-go" id="recruit-go">開始招募</button>
+          </div>
+
+          <!-- 側欄：各武將個別機率一覽 -->
+          <div class="recruit-rates">
+            <div class="recruit-rates-title">武將出現機率</div>
+            <div class="recruit-rates-list" id="recruit-rate-list"></div>
+          </div>
         </div>
-
-        <button class="recruit-go" id="recruit-go">開始招募</button>
       </div>
     </div>
 

@@ -322,57 +322,174 @@ html, body {
   z-index: 55;
 }
 #recruit-modal.hidden { display: none; }
+/* 古風宣紙墨底 + 金框 */
 .recruit-panel {
-  width: min(560px, 94vw);
-  background: linear-gradient(180deg, #2a1c3e, #140b22);
-  border: 2px solid #b98cf0;
-  border-radius: 16px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, .7), inset 0 0 30px rgba(90, 40, 140, .35);
-  padding: 18px 20px 20px;
+  position: relative;
+  width: min(770px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(90, 60, 24, .35), transparent 60%),
+    linear-gradient(180deg, #17120c, #0c0906);
+  border: 1px solid #9c7a34;
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px #1c140a, 0 0 0 4px #c9a24a,
+    0 20px 60px rgba(0, 0, 0, .8), inset 0 0 60px rgba(60, 40, 16, .35);
+  padding: 20px 22px 22px;
 }
+/* 四角雲雷紋裝飾 */
+.recruit-corner {
+  position: absolute;
+  width: 22px; height: 22px;
+  border: 2px solid #c9a24a;
+  opacity: .8;
+  pointer-events: none;
+}
+.recruit-corner.tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+.recruit-corner.tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+.recruit-corner.bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+.recruit-corner.br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
 .recruit-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(201, 162, 74, .4);
 }
 .recruit-title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
-  color: #ffe9b0;
-  text-shadow: 0 2px 6px #000;
+  letter-spacing: 4px;
+  color: #f0d493;
+  text-shadow: 0 0 12px rgba(201, 162, 74, .5), 0 2px 4px #000;
 }
 .recruit-wallet {
   margin-left: auto;
   font-size: 14px;
   font-weight: 700;
-  color: #cfe0ff;
-  background: rgba(0, 0, 0, .3);
-  border-radius: 10px;
-  padding: 4px 12px;
+  color: #d8c9a6;
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid rgba(201, 162, 74, .35);
+  border-radius: 6px;
+  padding: 5px 12px;
 }
 .recruit-wallet b { color: #ffe27a; }
 .recruit-close {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  border: none;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(201, 162, 74, .5);
   font-size: 16px;
   font-weight: 800;
-  color: #fff;
+  color: #e8d9b0;
   cursor: pointer;
-  background: radial-gradient(circle at 35% 30%, #b06cff, #6a24c4);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  background: linear-gradient(180deg, #3a2c14, #201607);
 }
+.recruit-close:hover { color: #fff; border-color: #c9a24a; }
 .recruit-close:active { transform: translateY(1px); }
 
+/* 兩欄：左主區 / 右機率一覽 */
+.recruit-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.recruit-main { flex: none; width: 384px; }
+
+/* 上方稀有度機率列 */
 .recruit-legend {
   display: flex;
-  justify-content: center;
-  gap: 14px;
-  font-size: 13px;
-  font-weight: 800;
+  gap: 6px;
   margin-bottom: 12px;
 }
+.recruit-legend-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #e8dcc0;
+  background: linear-gradient(180deg, rgba(40, 30, 14, .8), rgba(20, 14, 6, .8));
+  border: 1px solid rgba(201, 162, 74, .3);
+  border-top: 2px solid currentColor;      /* 頂邊依稀有度上色 */
+  border-radius: 4px;
+  padding: 3px 3px;
+}
+.recruit-legend-item .legend-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;                      /* 標籤不折行（良將 R 等） */
+}
+.recruit-legend-item .legend-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 5px currentColor;
+  flex: none;
+}
+.recruit-legend-item b { color: #ffe27a; font-size: 11px; }
+
+/* 右側：各武將個別機率 */
+.recruit-rates {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(20, 14, 8, .7), rgba(10, 7, 4, .7));
+  border: 1px solid rgba(201, 162, 74, .3);
+  border-radius: 6px;
+  padding: 10px 4px 10px 12px;
+}
+.recruit-rates-title {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #f0d493;
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(201, 162, 74, .3);
+}
+.recruit-rates-list {
+  overflow-y: auto;
+  max-height: 420px;
+  padding-right: 8px;
+}
+.recruit-rates-list::-webkit-scrollbar { width: 6px; }
+.recruit-rates-list::-webkit-scrollbar-thumb { background: rgba(201, 162, 74, .5); border-radius: 3px; }
+.rate-group { margin-bottom: 8px; }
+.rate-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 900;
+  color: currentColor;
+  padding: 3px 6px;
+  border-left: 3px solid currentColor;
+  background: rgba(255, 255, 255, .04);
+  margin-bottom: 2px;
+}
+.rate-group-sum { color: #d8c9a6; font-weight: 700; }
+.rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 3px 6px 3px 12px;
+  border-bottom: 1px dashed rgba(201, 162, 74, .12);
+}
+.rate-name { color: #e8dcc0; }
+.rate-row.rarity-SSR .rate-name { color: #ff8a8a; }
+.rate-row.rarity-SR  .rate-name { color: #ffdf8a; }
+.rate-row.rarity-R   .rate-name { color: #d3b0f5; }
+.rate-pct { color: #ffe27a; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* 老虎機輪帶視窗 */
 .recruit-reel {
@@ -382,10 +499,10 @@ html, body {
   height: 148px;
   margin: 0 auto 10px;
   overflow: hidden;
-  border-radius: 12px;
-  border: 2px solid rgba(185, 140, 240, .5);
-  background: linear-gradient(180deg, #0d0818, #060310);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, .7);
+  border-radius: 6px;
+  border: 1px solid rgba(201, 162, 74, .45);
+  background: linear-gradient(180deg, #0f0b06, #060402);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, .8);
 }
 /* 中央落點框（指示中獎格） */
 .recruit-marker {
@@ -533,7 +650,7 @@ html, body {
   gap: 5px;
   font-size: 13px;
   font-weight: 700;
-  color: #d7c4f5;
+  color: #cbb98f;
 }
 .recruit-field input {
   width: 100%;
@@ -542,12 +659,12 @@ html, body {
   font-weight: 800;
   color: #ffe27a;
   text-align: center;
-  background: rgba(0, 0, 0, .4);
-  border: 2px solid rgba(185, 140, 240, .5);
-  border-radius: 10px;
+  background: rgba(0, 0, 0, .45);
+  border: 1px solid rgba(201, 162, 74, .5);
+  border-radius: 6px;
   outline: none;
 }
-.recruit-field input:focus { border-color: #ffd24a; }
+.recruit-field input:focus { border-color: #ffd24a; box-shadow: 0 0 8px rgba(255, 210, 74, .35); }
 
 .recruit-go {
   display: block;
@@ -555,15 +672,16 @@ html, body {
   padding: 13px;
   font-size: 19px;
   font-weight: 900;
-  color: #2a0f3e;
-  background: linear-gradient(180deg, #ffdf80, #e0a83a);
-  border: none;
-  border-radius: 12px;
+  letter-spacing: 3px;
+  color: #2a1c07;
+  background: linear-gradient(180deg, #ffe8a6, #d8a83a 60%, #b6842a);
+  border: 1px solid #ffe8a6;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 0 #a87410;
+  box-shadow: 0 4px 0 #7a5410, 0 6px 14px rgba(0, 0, 0, .5);
 }
-.recruit-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #a87410; }
-.recruit-go:disabled { opacity: .5; cursor: default; box-shadow: 0 4px 0 #a87410; }
+.recruit-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #7a5410; }
+.recruit-go:disabled { opacity: .5; cursor: default; box-shadow: 0 4px 0 #7a5410; }
 
 /* ---------- 招募中獎特效（非白色武將登場演出） ---------- */
 #recruit-fx {
