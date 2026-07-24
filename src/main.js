@@ -4,8 +4,9 @@ import { EnemyManager } from './enemies.js';
 import { BulletManager } from './bullets.js';
 import { makeCoin } from './models.js';
 import { UI, RoomSelect, BossPlate } from './ui.js';
+import { Recruit } from './recruit.js';
 import { BossShow, hasBossShow } from './bossshow.js';
-import { AIPlayer, MeleeGeneral } from './players.js';
+import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { CHARACTERS } from './characters.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
 
@@ -94,20 +95,57 @@ function runRoomTransition(rebuild) {
 }
 const BOSS_LABEL_HEIGHT = 8.1;   // Boss 頭頂名牌的世界高度（紅纓頂之上）
 
-// ---------- 中座玩家：近戰武將 ----------
+// ---------- 中座玩家：近戰武將（呂布/關羽）+ 弓將（黃忠，原地射擊）----------
 const hero = new MeleeGeneral(scene, GENERALS[0], enemyMgr, attemptSlash);
 ui.onGeneralChange = (def) => hero.setGeneral(def);
 
-// ---------- 右中：切換操控角色（呂布 / 關羽）----------
+// 黃忠：站原地自動射擊；放箭前先以 attemptShot 扣玩家下注，命中由 onHit 給玩家
+const playerArcher = new PlayerArcher(scene, bulletMgr, enemyMgr, CHARACTERS.huangzhong, attemptShot);
+let activeCharType = 'melee';   // 'melee' = 呂布/關羽衝殺；'archer' = 黃忠原地射擊
+
+// 弓將出手：籌碼足夠則扣一次下注並回傳 true（放箭），不足則不放箭
+function attemptShot() {
+  const bet = ui.bet;
+  if (state.coins < bet) return false;
+  state.coins -= bet;
+  ui.refresh();
+  return true;
+}
+
+// ---------- 右中：切換操控角色（呂布 / 關羽 / 黃忠）----------
 const charBtns = document.querySelectorAll('#char-switch .char-btn');
+function setActiveCharacter(def) {
+  const seatX = SEAT_X[roomSelect.currentSeat];
+  if (def.type === 'archer') {
+    activeCharType = 'archer';
+    hero.setActive(false);
+    playerArcher.setVisible(true);
+    playerArcher.moveToSeat(seatX);
+  } else {
+    activeCharType = 'melee';
+    playerArcher.setVisible(false);
+    hero.setActive(true);
+    hero.setCharacter(def);
+    hero.moveToSeat(seatX);
+  }
+}
 charBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     const def = CHARACTERS[btn.dataset.char];
     if (!def) return;
-    hero.setCharacter(def);
+    setActiveCharacter(def);
     charBtns.forEach((b) => b.classList.toggle('active', b === btn));
   });
 });
+
+// ---------- 左中：招募系統（花費籌碼 + 時間，老虎機抽武將）----------
+const recruit = new Recruit(state);
+recruit.onSpend = () => ui.refresh();               // 扣款後同步底部 HUD 金錢
+recruit.onResult = (list) => {
+  ui.refresh();
+  const names = list.map((c) => `「${c.name}」(${c.rarity})`).join('、');
+  ui.pushMarquee(`🎯 恭喜你招募到 ${names}！`);
+};
 
 // ---------- 左右兩側 AI 陪玩玩家（遠程砲台）----------
 const aiPlayers = AI_PLAYERS.map(
@@ -126,7 +164,8 @@ aiPlayers.forEach((p) => {
 // 依「玩家座位 + 房間資料」重新擺放三個座位並渲染底部三人列
 function applyRoomSeat(room, humanSeat) {
   roomBadgeName.textContent = room.name;
-  hero.moveToSeat(SEAT_X[humanSeat]);   // 玩家（近戰呂布）移到所選座位
+  hero.moveToSeat(SEAT_X[humanSeat]);         // 玩家近戰武將移到所選座位
+  playerArcher.moveToSeat(SEAT_X[humanSeat]); // 弓將黃忠同步座位
 
   // 玩家以外的兩個座位指派給兩位 AI（各帶該房 NPC 的名字/武將/籌碼/下注）
   const others = SEATS.filter((s) => s !== humanSeat);
@@ -203,8 +242,9 @@ function pickEnemy() {
 canvas.addEventListener('pointerdown', (e) => {
   setRayFromEvent(e);
   const enemy = pickEnemy();
-  if (enemy) hero.select(enemy);   // 點到敵人 = 鎖定並衝刺攻擊，打死後返回原位
-  else hero.clearSelection();      // 點空地 = 取消鎖定
+  const controller = activeCharType === 'archer' ? playerArcher : hero;
+  if (enemy) controller.select(enemy);   // 點到敵人 = 鎖定（近戰衝刺砍殺 / 弓將優先射擊）
+  else controller.clearSelection();       // 點空地 = 取消鎖定
 });
 
 // ---------- 近戰揮刀：由 MeleeGeneral 呼叫 ----------
@@ -363,8 +403,13 @@ function loop() {
   // Boss 開獎表演 / 換房轉場中：全場暫停（玩家 / AI / 敵軍 / 砲彈皆停），只維持渲染
   if (bossShow.active || transitioning) { renderer.render(scene, camera); return; }
 
-  // 中座近戰武將：點選的敵人優先；開啟自動時沒點選就追擊最近的敵人
-  hero.update(dt, { auto: ui.auto });
+  // 中座玩家：黃忠 = 原地弓將自動射擊；否則近戰武將衝殺（點選優先，自動追最近）
+  if (activeCharType === 'archer') {
+    playerArcher.betIndex = ui.betIndex;   // 同步玩家下注（決定 power 與扣款）
+    playerArcher.update(dt);
+  } else {
+    hero.update(dt, { auto: ui.auto });
+  }
 
   // 左右 AI 玩家自動瞄準開火（遠程）
   for (const p of aiPlayers) p.update(dt);
@@ -413,9 +458,10 @@ function showSceneBanner() {
 
 // 供主控台除錯 / 自動化測試使用
 window.__game = {
-  hero, enemyMgr, ui, camera, bossPlate, bossShow, scene, roomSelect,
+  hero, playerArcher, enemyMgr, ui, camera, bossPlate, bossShow, scene, roomSelect, recruit,
   rebuildBattlefield, runRoomTransition,
   get currentScene() { return currentScene; },
+  get activeCharType() { return activeCharType; },
 };
 
 // ---------- 視窗縮放 ----------

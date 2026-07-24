@@ -255,6 +255,500 @@ html, body {
 .room-page-btn:disabled { opacity: .4; cursor: default; }
 #room-page-label { font-size: 16px; font-weight: 800; color: #ffe9b0; min-width: 44px; text-align: center; }
 
+/* ---------- 左中：系統入口按鈕（招募 / 後宮） ---------- */
+#system-switch {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.system-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border-radius: 16px;
+  border: 3px solid rgba(255, 205, 122, .5);
+  background: linear-gradient(180deg, #6b4a18, #3a2608);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .55);
+  cursor: pointer;
+  transition: transform .1s, filter .15s, border-color .15s;
+}
+.system-btn-icon {
+  line-height: 0;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+}
+.system-btn-icon svg {
+  display: block;
+  width: 42px;
+  height: 42px;
+}
+.system-btn-label {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffe9b0;
+  text-shadow: 0 1px 3px #000;
+}
+.system-btn:hover { filter: brightness(1.15); }
+.system-btn:active { transform: scale(.96); }
+.system-btn.active {
+  border-color: #ffd24a;
+  box-shadow: 0 0 16px rgba(255, 200, 70, .8);
+}
+
+/* ---------- 招募系統彈窗 ---------- */
+/* 稀有度配色（名冊 / 圖例 / 結果共用） */
+.rarity-SSR { color: #ff4d4d; }
+.rarity-SR  { color: #ffd24a; }
+.rarity-R   { color: #c07af0; }
+.rarity-H   { color: #eaeef7; }
+
+#recruit-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 8, 16, .72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 55;
+}
+#recruit-modal.hidden { display: none; }
+.recruit-panel {
+  width: min(560px, 94vw);
+  background: linear-gradient(180deg, #2a1c3e, #140b22);
+  border: 2px solid #b98cf0;
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, .7), inset 0 0 30px rgba(90, 40, 140, .35);
+  padding: 18px 20px 20px;
+}
+.recruit-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.recruit-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffe9b0;
+  text-shadow: 0 2px 6px #000;
+}
+.recruit-wallet {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  color: #cfe0ff;
+  background: rgba(0, 0, 0, .3);
+  border-radius: 10px;
+  padding: 4px 12px;
+}
+.recruit-wallet b { color: #ffe27a; }
+.recruit-close {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: none;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, #b06cff, #6a24c4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+.recruit-close:active { transform: translateY(1px); }
+
+.recruit-legend {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+/* 老虎機輪帶視窗 */
+.recruit-reel {
+  position: relative;
+  width: 384px;              /* 3 格 × 128 */
+  max-width: 100%;
+  height: 148px;
+  margin: 0 auto 10px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 2px solid rgba(185, 140, 240, .5);
+  background: linear-gradient(180deg, #0d0818, #060310);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, .7);
+}
+/* 中央落點框（指示中獎格） */
+.recruit-marker {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  bottom: 6px;
+  width: 128px;
+  transform: translateX(-50%);
+  border: 3px solid #ffd24a;
+  border-radius: 10px;
+  box-shadow: 0 0 16px rgba(255, 210, 74, .7);
+  pointer-events: none;
+  z-index: 2;
+}
+.recruit-strip {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+.recruit-cell {
+  position: relative;
+  flex: none;
+  width: 128px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recruit-cell img {
+  width: 108px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 3px solid currentColor;   /* 邊框依稀有度上色 */
+  background: #000;
+}
+/* 頭像左下角兩個定位圈圈（文/武 + 專長）：小巧、半透明、不壓到名字 */
+.recruit-traits {
+  position: absolute;
+  left: 10px;
+  bottom: 30px;               /* 抬高到名字帶之上 */
+  display: flex;
+  gap: 3px;
+  z-index: 3;
+}
+.trait-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: color-mix(in srgb, var(--tc, #666) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tc, #fff) 70%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+  backdrop-filter: blur(1px);
+}
+
+.recruit-cell-name {
+  position: absolute;
+  left: 10px; right: 10px; bottom: 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+  background: linear-gradient(0deg, rgba(0, 0, 0, .78), rgba(0, 0, 0, 0));
+  padding: 6px 0 2px;
+  border-radius: 0 0 8px 8px;
+}
+
+/* 招募結果 */
+.recruit-result {
+  min-height: 30px;
+  margin: 12px 0 4px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: #cfe0ff;
+}
+.recruit-result.warn { color: #ff8a6a; }
+.recruit-result.reveal { animation: recruitReveal .5s ease-out; }
+/* 兩隻招募結果並排 */
+.recruit-result.reveal {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.recruit-result-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.recruit-result-item.rarity-SSR .recruit-result-name { color: #ff6b6b; }
+.recruit-result-item.rarity-SR  .recruit-result-name { color: #ffd24a; }
+.recruit-result-item.rarity-R   .recruit-result-name { color: #c9a0f5; }
+.recruit-result-item.rarity-H   .recruit-result-name { color: #eaeef7; }
+.recruit-result-item.rarity-SSR .recruit-result-tier { background: #ff4d4d; }
+.recruit-result-item.rarity-SR  .recruit-result-tier { background: #ffd24a; }
+.recruit-result-item.rarity-R   .recruit-result-tier { background: #c07af0; }
+.recruit-result-item.rarity-H   .recruit-result-tier { background: #eaeef7; }
+.recruit-result-tier {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 900;
+  color: #000;
+  background: currentColor;          /* 由 rarity-* 決定底色 */
+  border-radius: 8px;
+  padding: 2px 10px;
+  margin-right: 8px;
+}
+.recruit-result-tier { color: inherit; }
+.recruit-result.rarity-SSR .recruit-result-tier { background: #ff4d4d; }
+.recruit-result.rarity-SR  .recruit-result-tier { background: #ffd24a; }
+.recruit-result.rarity-R   .recruit-result-tier { background: #c07af0; }
+.recruit-result.rarity-H   .recruit-result-tier { background: #eaeef7; }
+.recruit-result-tier,
+.recruit-result-name { color: #fff; }
+.recruit-result.rarity-SSR .recruit-result-name { color: #ff6b6b; }
+.recruit-result.rarity-SR  .recruit-result-name { color: #ffd24a; }
+.recruit-result.rarity-R   .recruit-result-name { color: #c9a0f5; }
+.recruit-result-tier { color: #1a0f28 !important; }
+@keyframes recruitReveal {
+  0% { transform: scale(.6); opacity: 0; }
+  70% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 兩個輸入空格 */
+.recruit-form {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 14px;
+}
+.recruit-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #d7c4f5;
+}
+.recruit-field input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffe27a;
+  text-align: center;
+  background: rgba(0, 0, 0, .4);
+  border: 2px solid rgba(185, 140, 240, .5);
+  border-radius: 10px;
+  outline: none;
+}
+.recruit-field input:focus { border-color: #ffd24a; }
+
+.recruit-go {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  font-size: 19px;
+  font-weight: 900;
+  color: #2a0f3e;
+  background: linear-gradient(180deg, #ffdf80, #e0a83a);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #a87410;
+}
+.recruit-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #a87410; }
+.recruit-go:disabled { opacity: .5; cursor: default; box-shadow: 0 4px 0 #a87410; }
+
+/* ---------- 招募中獎特效（非白色武將登場演出） ---------- */
+#recruit-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+#recruit-fx.hidden { display: none; }
+
+/* 特效等級：紫(r1) → 金(r2) → 紅(r3)。以 CSS 變數統一主題色。 */
+#recruit-fx.tier-R  { --fx: #c07af0; --fx2: #e6c4ff; }
+#recruit-fx.tier-SR { --fx: #ffd24a; --fx2: #fff3c8; }
+#recruit-fx.tier-SSR{ --fx: #ff4d4d; --fx2: #ffd24a; }
+
+/* 開場閃光 */
+.rfx-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, var(--fx2), var(--fx) 30%, transparent 62%);
+  opacity: 0;
+}
+#recruit-fx.show .rfx-flash { animation: rfxFlash .55s ease-out; }
+#recruit-fx.tier-SSR.show .rfx-flash { animation-duration: .75s; }
+@keyframes rfxFlash {
+  0% { opacity: 0; transform: scale(.4); }
+  25% { opacity: .95; }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* 背景放射光芒（金/紅才轉得明顯） */
+.rfx-rays {
+  position: absolute;
+  left: 50%; top: 46%;
+  width: 200vmax; height: 200vmax;
+  transform: translate(-50%, -50%) scale(0);
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    color-mix(in srgb, var(--fx) 30%, transparent) 0 6deg,
+    transparent 6deg 14deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+  opacity: 0;
+}
+#recruit-fx.show .rfx-rays {
+  opacity: .9;
+  animation: rfxRaysIn .6s ease-out forwards, rfxRaysSpin 14s linear infinite .6s;
+}
+#recruit-fx.tier-R .rfx-rays { opacity: 0 !important; }   /* 紫階不放光芒 */
+#recruit-fx.tier-SSR.show .rfx-rays { animation: rfxRaysIn .6s ease-out forwards, rfxRaysSpin 7s linear infinite .6s; }
+@keyframes rfxRaysIn { to { transform: translate(-50%, -50%) scale(1); } }
+@keyframes rfxRaysSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+/* 登場標語 */
+.rfx-banner {
+  position: absolute;
+  top: 12%;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: 10px;
+  color: var(--fx2);
+  text-shadow: 0 0 18px var(--fx), 0 4px 10px #000;
+  opacity: 0;
+}
+#recruit-fx.show .rfx-banner { animation: rfxBanner .6s cubic-bezier(.2,1.4,.4,1) .15s backwards; opacity: 1; }
+#recruit-fx.tier-SSR .rfx-banner { font-size: 58px; letter-spacing: 14px; }
+@keyframes rfxBanner {
+  from { transform: scale(2.2); opacity: 0; letter-spacing: 40px; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* 中獎頭像卡（兩張並排） */
+.rfx-cards {
+  position: relative;
+  display: flex;
+  gap: 36px;
+}
+.rfx-card {
+  width: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 4px solid var(--card, #fff);
+  background: #0a0713;
+  box-shadow: 0 0 30px var(--card), 0 12px 40px rgba(0,0,0,.7);
+  transform: translateY(40px) scale(.7);
+  opacity: 0;
+}
+#recruit-fx.show .rfx-card { animation: rfxCardIn .55s cubic-bezier(.2,1.35,.4,1) .3s backwards; opacity: 1; transform: none; }
+#recruit-fx.show .rfx-card:nth-child(2) { animation-delay: .45s; }
+@keyframes rfxCardIn {
+  from { transform: translateY(50px) scale(.6); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.rfx-card-img {
+  position: relative;
+}
+.rfx-card img {
+  display: block;
+  width: 100%;
+  height: 234px;
+  object-fit: cover;
+}
+/* FX 卡片上的定位圈圈稍大一點；卡面圖片底部無名字，貼齊左下即可 */
+.rfx-card .recruit-traits { bottom: 10px; }
+.rfx-card .trait-circle {
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+}
+.rfx-card-foot {
+  padding: 8px 0 10px;
+  text-align: center;
+}
+.rfx-card-tier {
+  font-size: 13px;
+  font-weight: 900;
+  color: #1a0f28;
+  background: var(--card);
+  border-radius: 8px;
+  padding: 2px 10px;
+}
+.rfx-card-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--card);
+  text-shadow: 0 2px 6px #000;
+}
+.rfx-card.rarity-SSR { --card: #ff4d4d; }
+.rfx-card.rarity-SR  { --card: #ffd24a; }
+.rfx-card.rarity-R   { --card: #c07af0; }
+.rfx-card.rarity-H   { --card: #eaeef7; }
+/* SSR 卡片持續脈動光暈 */
+#recruit-fx.tier-SSR .rfx-card { animation: rfxCardIn .55s cubic-bezier(.2,1.35,.4,1) .3s backwards, rfxCardPulse 1.1s ease-in-out 1s infinite; }
+@keyframes rfxCardPulse {
+  0%, 100% { box-shadow: 0 0 30px var(--card), 0 12px 40px rgba(0,0,0,.7); }
+  50% { box-shadow: 0 0 60px var(--card), 0 0 90px var(--card), 0 12px 40px rgba(0,0,0,.7); }
+}
+
+/* 粒子（噴發後外飛淡出；方向由 --tx/--ty 決定） */
+.rfx-particles { position: absolute; left: 50%; top: 48%; width: 0; height: 0; }
+.rfx-p {
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--pc, var(--fx2));
+  box-shadow: 0 0 10px var(--pc, var(--fx));
+  opacity: 0;
+  animation: rfxParticle var(--dur, 1.1s) ease-out var(--delay, 0s) forwards;
+}
+@keyframes rfxParticle {
+  0% { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(.2); opacity: 0; }
+}
+
+.rfx-hint {
+  position: absolute;
+  bottom: 6%;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 15px;
+  color: #cfe0ff;
+  opacity: 0;
+  animation: rfxHint .6s ease-out 1.4s forwards;
+}
+@keyframes rfxHint { to { opacity: .8; } }
+
+/* 螢幕震動（金/紅登場時抖一下） */
+@keyframes fxShake {
+  0%,100% { transform: translate(0,0); }
+  20% { transform: translate(-6px, 4px); }
+  40% { transform: translate(6px, -4px); }
+  60% { transform: translate(-5px, -3px); }
+  80% { transform: translate(5px, 3px); }
+}
+#game-root.fx-shake { animation: fxShake .5s ease-in-out; }
+#game-root.fx-shake-strong { animation: fxShake .7s ease-in-out 2; }
+
 /* ---------- 右中：切換角色按鈕 ---------- */
 #char-switch {
   position: absolute;
@@ -737,6 +1231,20 @@ html, body {
   color: #ffe9b0;
   background: linear-gradient(180deg, #7a5a18, #4a3208);
   border: 1px solid rgba(255,215,122,.55);
+}
+
+/* 赤壁 → 紅底 */
+.room-scene.scene-chibi {
+  color: #ffe0e0;
+  background: linear-gradient(180deg, #a3241f, #6e120e);
+  border-color: rgba(255,140,140,.6);
+}
+
+/* 虎牢關 → 綠底 */
+.room-scene.scene-hulao {
+  color: #e2ffe0;
+  background: linear-gradient(180deg, #1f7a3a, #0e4a22);
+  border-color: rgba(140,255,160,.6);
 }
 
 /* ==================== Boss 開獎表演（bossShow） ==================== */

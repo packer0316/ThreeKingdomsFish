@@ -1021,6 +1021,69 @@ export function makeArcherGeneral(def) {
   return g;
 }
 
+// ---------- 黃忠（玩家可操控的弓將，原地射擊）----------
+// 沿用弓箭手 rig（userData.parts 相容拉弓機制），再疊加老將造型：
+// 白鬚白髮、綠金鎧甲、鍍金大弓、綠金披風，比一般弓兵更精緻壯碩。
+export function makeHuangzhong() {
+  const HZ = { name: '黃忠', color: 0xcaa23a, robe: 0x2f7a3a, blade: 0x9be86a, scale: 1.3 };
+  const g = makeArcherGeneral(HZ);
+  const GOLD = 0xd8a83a;
+
+  // 鍍金大弓（把木弓改成金色）
+  g.traverse((o) => {
+    if (o.geometry && o.geometry.type === 'TorusGeometry') o.material = metalMat(0xe0b24a);
+  });
+
+  // 金胸甲 + 金腹帶
+  const chest = box(0.82, 0.6, 0.12, GOLD, metalMat(GOLD));
+  chest.position.set(0, 1.62, 0.3);
+  g.add(chest);
+  const beltGold = box(1.02, 0.1, 0.64, GOLD, metalMat(GOLD));
+  beltGold.position.y = 0.98;
+  g.add(beltGold);
+
+  // 加大金護肩
+  for (const s of [-1, 1]) {
+    const pad = sph(0.27, GOLD, metalMat(GOLD));
+    pad.scale.set(1.15, 0.72, 1.05);
+    pad.position.set(s * 0.62, 2.02, 0.02);
+    g.add(pad);
+  }
+
+  // 白鬚（老將）＋白鬢
+  const WHITE = 0xece8dc;
+  const beard = box(0.44, 0.52, 0.16, WHITE);
+  beard.position.set(0, 2.18, 0.28);
+  g.add(beard);
+  const beardTip = box(0.26, 0.3, 0.14, WHITE);
+  beardTip.position.set(0, 1.9, 0.3);
+  g.add(beardTip);
+  for (const s of [-1, 1]) {
+    const whisk = box(0.09, 0.26, 0.12, WHITE);
+    whisk.position.set(s * 0.27, 2.46, 0.16);
+    g.add(whisk);
+  }
+  // 白髮髻（盔後）
+  const bun = sph(0.17, WHITE);
+  bun.position.set(0, 2.74, -0.26);
+  g.add(bun);
+
+  // 綠金披風
+  const cape = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.12, 1.62),
+    mat(0x1f5a2a, { side: THREE.DoubleSide })
+  );
+  cape.position.set(0, 1.55, -0.36);
+  cape.rotation.x = 0.1;
+  g.add(cape);
+  const capeHem = box(1.12, 0.1, 0.04, GOLD, metalMat(GOLD));
+  capeHem.position.set(0, 0.76, -0.4);
+  cape.rotation.x = 0.1;
+  g.add(capeHem);
+
+  return g;
+}
+
 // ---------- 武將砲台（玩家）----------
 export function makeGeneralTurret(def) {
   const g = new THREE.Group();

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { makeHuangzhong } from './models.js';
 
 import lubuFbx from './res/charactor/lubu/Lubu.fbx?url';
 import lubuTex from './res/charactor/lubu/Lubu.png?url';
@@ -16,12 +17,14 @@ export const CHARACTERS = {
   lubu: {
     id: 'lubu',
     name: '呂布',
+    type: 'melee',
     btn: 'textures/charactorBtn/lubu.png',
     fbx: lubuFbx,
     fps: 30,
     height: 4.5,
     yaw: 0,
     singleTex: lubuTex,
+    ghostColor: 0xffb84d,             // 衝刺殘影色（暖金）
     hideNodes: /(^|[|:])chituma$/i,   // 隱藏同 FBX 內的赤兔馬
     clips: { idle: [10, 70], attack1: [234, 264], attack2: [80, 143], attack4: [534, 550], ultimate: [153, 224] },
     attackCycle: ['attack1', 'attack2', 'attack4'],
@@ -29,6 +32,7 @@ export const CHARACTERS = {
   guanyu: {
     id: 'guanyu',
     name: '關羽',
+    type: 'melee',
     btn: 'textures/charactorBtn/guanyu.png',
     fbx: guanyuFbx,
     fps: 30,
@@ -37,12 +41,21 @@ export const CHARACTERS = {
     // FBX 材質引用 GuanYu.jpg（身體）與 GreenDragon.jpg（青龍偃月刀），改指向打包後的資源
     textureMap: { 'guanyu.jpg': guanyuTex, 'greendragon.jpg': greenDragonTex },
     brighten: 2.1,   // 模型偏暗 → 以 shader 提亮（光照前基礎色 + 光照後輸出色）
+    ghostColor: 0x39ff14,   // 衝刺殘影色（螢光綠）
     clips: { idle: [66, 126], attack1: [213, 278], attack2: [284, 396], attack3: [822, 886], attack4: [892, 952] },
     attackCycle: ['attack1', 'attack2', 'attack3', 'attack4'],
   },
+  // 黃忠：無 FBX，程序化弓將；固定原地自動射擊，不衝出去打怪
+  huangzhong: {
+    id: 'huangzhong',
+    name: '黃忠',
+    type: 'archer',
+    btn: 'textures/charactorBtn/huangZhong.png',
+    build: makeHuangzhong,   // 程序化模型（models.js）
+  },
 };
 
-export const CHARACTER_ORDER = ['lubu', 'guanyu'];
+export const CHARACTER_ORDER = ['lubu', 'guanyu', 'huangzhong'];
 
 const cache = {};
 

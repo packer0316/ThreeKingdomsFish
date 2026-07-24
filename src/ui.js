@@ -229,10 +229,14 @@ export class RoomSelect {
 
       // 該房目前輪替到的戰場場景
       const sceneName = sceneById(room.sceneId).name;
+      // 依場景給徽章底色：赤壁→紅、虎牢關→綠
+      const sceneMod =
+        sceneName.includes('赤壁') ? ' scene-chibi' :
+        sceneName.includes('虎牢') ? ' scene-hulao' : '';
 
       row.innerHTML =
         `<div class="room-row-name">${room.name}` +
-          `<span class="room-scene">⚔ ${sceneName}</span></div>` +
+          `<span class="room-scene${sceneMod}">⚔ ${sceneName}</span></div>` +
         `<div class="room-seats">${seats}</div>` +
         `<div class="room-occ">${dots}<span class="room-occ-count">${taken}/3</span></div>`;
 

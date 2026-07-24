@@ -53,7 +53,8 @@ export class AIPlayer {
 
   // ---------- 建立弓箭手 ----------
   buildArcher() {
-    const t = makeArcherGeneral(this.general);
+    const build = this.def.build || makeArcherGeneral;   // 可換成程序化武將（如黃忠）
+    const t = build(this.general);
     t.position.set(this.def.x, 0, FIELD.turretZ);
 
     // 箭矢發射點（弓的前方），朝向 -Z
@@ -171,6 +172,100 @@ export class AIPlayer {
 
 function fmt(n) {
   return Math.floor(n).toLocaleString('en-US');
+}
+
+// 中座玩家改用弓將時（如黃忠）：站在原地自動瞄準最近敵人拉弓放箭。
+// 沿用 AIPlayer 的瞄準/拉弓/放箭邏輯，但「放箭 = 玩家出手」——
+// 由 attemptShot() 先扣玩家下注（籌碼不足則不放箭），命中擊殺由 onHit
+// 以 owner=null（中座真人）給玩家獎勵；不累積自身籌碼、不動底部 HUD。
+export class PlayerArcher extends AIPlayer {
+  constructor(scene, bulletMgr, enemyMgr, character, attemptShot) {
+    const def = {
+      seat: 'mid', name: character.name, generalIndex: 0, x: 0,
+      coins: 0, betIndex: 2, drawTime: 0.5, recoverTime: 0.35,
+      build: character.build,
+    };
+    super(scene, def, bulletMgr, enemyMgr, null);
+    this.attemptShot = attemptShot;
+    this.selected = null;          // 玩家滑鼠點選鎖定的敵人（優先射擊）
+
+    // 鎖定目標的地面紅圈（與近戰武將同款，放在被鎖定的怪腳下）
+    this.ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff5a44, transparent: true, opacity: 0.6,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    this.ring = new THREE.Group();
+    const rb = new THREE.Mesh(new THREE.RingGeometry(1.02, 1.12, 56), this.ringMat);
+    rb.rotation.x = -Math.PI / 2;
+    this.ring.add(rb);
+    for (let i = 0; i < 2; i++) {
+      const arc = new THREE.Mesh(new THREE.RingGeometry(1.16, 1.28, 40, 1, 0, Math.PI * 0.5), this.ringMat);
+      arc.rotation.x = -Math.PI / 2;
+      arc.rotation.z = Math.PI * i;
+      this.ring.add(arc);
+    }
+    this.ring.position.y = 0.05;
+    this.ring.visible = false;
+    scene.add(this.ring);
+
+    this.setVisible(false);
+  }
+
+  setVisible(v) {
+    this.enabled = v;
+    this.turret.visible = v;
+    if (!v) {
+      this.selected = null;
+      this.ring.visible = false;
+    }
+  }
+
+  // 玩家點選敵人：鎖定為優先射擊目標
+  select(enemy) {
+    if (!enemy || enemy.dead || enemy.removed) return;
+    this.selected = enemy;
+  }
+  clearSelection() { this.selected = null; }
+
+  // 覆寫瞄準：有鎖定目標則優先，否則自動挑最近的
+  update(dt) {
+    if (this.selected && (this.selected.dead || this.selected.removed)) this.selected = null;
+    this.retargetCooldown -= dt;
+    if (this.selected) {
+      this.current = this.selected;
+    } else if (!this.current || this.current.dead || this.retargetCooldown <= 0) {
+      this.current = this.enemyMgr.nearest(this.turret.position);
+      this.retargetCooldown = 0.6 + Math.random() * 0.8;
+    }
+    const hasTarget = this.current && !this.current.dead;
+    if (hasTarget) this.target.copy(this.current.mesh.position).setY(1.4);
+    this.aimAt(this.target);
+    this.stepDraw(dt, hasTarget);
+
+    // 更新鎖定紅圈（僅在有點選鎖定時顯示）
+    const sel = this.selected;
+    if (sel && !sel.dead && !sel.removed) {
+      this.ring.visible = true;
+      this.ring.position.set(sel.mesh.position.x, 0.05, sel.mesh.position.z);
+      this.ring.rotation.y += dt * 2.0;
+      this.ring.scale.setScalar(Math.max(1, sel.radius));
+    } else {
+      this.ring.visible = false;
+    }
+  }
+
+  // 玩家金錢統一由主程式處理，關閉 AIPlayer 的自累加
+  win() {}
+  pay() {}
+
+  releaseArrow() {
+    if (!this.attemptShot || !this.attemptShot()) return;   // 籌碼不足 → 不放箭
+    const muzzleWorld = new THREE.Vector3();
+    this.turret.userData.muzzle.getWorldPosition(muzzleWorld);
+    const dir = new THREE.Vector3().subVectors(this.target, muzzleWorld).normalize();
+    const power = 1 + Math.floor(this.betIndex / 2);
+    this.bulletMgr.fire(muzzleWorld, dir, power, this.general.blade, null); // owner=null → 中座玩家
+  }
 }
 
 // 中座近戰武將（真人玩家操控，模型為呂布 Lubu.fbx）------------------
@@ -434,6 +529,24 @@ export class MeleeGeneral {
     if (!this.target) this.mesh.position.x = x;
   }
 
+  // 啟用 / 停用（切換到弓將黃忠時，近戰武將整個隱藏並停止更新）
+  setActive(v) {
+    this.mesh.visible = v;
+    if (!v) {
+      this.selected = null;
+      this.target = null;
+      if (this.targetRing) this.targetRing.visible = false;
+      // 立即回收衝刺殘影與塵光，避免切換角色後殘留在場上
+      for (const g of this.ghosts) {
+        g.root.visible = false;
+        g.life = 0;
+        if (g.mat) g.mat.opacity = 0;
+      }
+      for (const p of this.dust) this.scene.remove(p.mesh);
+      this.dust.length = 0;
+    }
+  }
+
   // 玩家點選敵人：立即鎖定並前往攻擊（不需長按）
   select(enemy) {
     if (!enemy || enemy.dead || enemy.removed) return;
@@ -453,10 +566,11 @@ export class MeleeGeneral {
     this.ghostSrcNodes = [];
     model.traverse((o) => this.ghostSrcNodes.push(o));
 
+    const ghostColor = (this.character && this.character.ghostColor) || 0xffb84d;
     for (let i = 0; i < GHOST_COUNT; i++) {
       const root = cloneSkinned(model);
       const mat = new THREE.MeshBasicMaterial({
-        color: 0xffb84d,
+        color: ghostColor,
         transparent: true,
         opacity: 0,
         depthWrite: false,
