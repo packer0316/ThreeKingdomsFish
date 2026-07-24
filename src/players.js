@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeArcherGeneral } from './models.js';
+import { spawnHuangzhong } from './huangzhongModel.js';
 import { loadCharacter, CHARACTERS } from './characters.js';
 import { FIELD, BET_LEVELS, GENERALS } from './config.js';
 
@@ -52,17 +53,58 @@ export class AIPlayer {
   get bet() { return BET_LEVELS[this.betIndex]; }
 
   // ---------- 建立弓箭手 ----------
+  // 弓將一律使用黃忠 FBX：平常播 Walking，放箭時播 Archery_Shot_3。
+  // 模型非同步載入，載好前先以空群組佔位（含發射點）。
   buildArcher() {
-    const build = this.def.build || makeArcherGeneral;   // 可換成程序化武將（如黃忠）
-    const t = build(this.general);
+    this.fbxArcher = true;
+    this.fbxReady = false;
+    this.mixer = null;
+    this.fbxActions = {};
+    this.currentArcherAction = null;
+
+    const t = new THREE.Group();
     t.position.set(this.def.x, 0, FIELD.turretZ);
 
-    // 箭矢發射點（弓的前方），朝向 -Z
+    // 箭矢發射點（弓將胸口高度前方），朝向 -Z
     const muzzle = new THREE.Object3D();
-    muzzle.position.set(0, t.userData.parts.bowY, t.userData.parts.bowZ - 0.5);
+    muzzle.position.set(0, 2.6, -0.8);
     t.add(muzzle);
     t.userData.muzzle = muzzle;
+
+    spawnHuangzhong((inst) => {
+      t.add(inst.model);
+      this.fbxModel = inst.model;
+      this.mixer = inst.mixer;
+      this.fbxActions = inst.actions;
+      this.fbxReady = true;
+      this.playArcher('walk');
+    });
     return t;
+  }
+
+  // 播放弓將動作：walk = 迴圈行走；shot = 放箭（播一次）
+  playArcher(name) {
+    const a = this.fbxActions[name];
+    if (!a) return;
+    // 走路時背對 camera（面向戰場），射擊動作朝向不同需再修正
+    if (this.fbxModel) this.fbxModel.rotation.y = name === 'shot' ? Math.PI / 2 : Math.PI;
+    if (name === 'walk') {
+      if (this.currentArcherAction === a) return;
+      a.reset();
+      a.setLoop(THREE.LoopRepeat, Infinity);
+      a.enabled = true;
+      a.setEffectiveWeight(1);
+      a.fadeIn(0.2);
+      a.play();
+    } else {
+      a.reset();
+      a.setLoop(THREE.LoopOnce, 1);
+      a.clampWhenFinished = true;
+      a.fadeIn(0.05);
+      a.play();
+    }
+    if (this.currentArcherAction && this.currentArcherAction !== a) this.currentArcherAction.fadeOut(0.15);
+    this.currentArcherAction = a;
   }
 
   // 換座位：把弓箭手移到指定座位的橫向座標
@@ -86,9 +128,13 @@ export class AIPlayer {
     this.phase = 'idle';
     this.phaseT = 0;
     this.drawVal = 0;
-    this.applyDraw(0);
-    const parts = this.turret.userData.parts;
-    if (parts && parts.nockedArrow) parts.nockedArrow.visible = false;
+    if (this.fbxArcher) {
+      if (this.fbxReady) this.playArcher('walk');
+    } else {
+      this.applyDraw(0);
+      const parts = this.turret.userData.parts;
+      if (parts && parts.nockedArrow) parts.nockedArrow.visible = false;
+    }
     if ('selected' in this) this.selected = null;   // PlayerArcher 的滑鼠鎖定
     if (this.ring) this.ring.visible = false;       // PlayerArcher 的鎖定紅圈
   }
@@ -105,6 +151,7 @@ export class AIPlayer {
 
   // ---------- 每幀更新：選目標、轉身瞄準、拉弓放箭 ----------
   update(dt) {
+    if (this.mixer) this.mixer.update(dt);
     this.retargetCooldown -= dt;
     if (!this.current || this.current.dead || this.retargetCooldown <= 0) {
       this.current = this.enemyMgr.nearest(this.turret.position);
@@ -125,8 +172,38 @@ export class AIPlayer {
     this.turret.rotation.y = Math.atan2(-dx, -dz);
   }
 
+  // FBX 弓將（黃忠）：平常走路迴圈，時機到就放箭並播 Archery_Shot_3，
+  // 放箭節奏沿用 drawTime / recoverTime。
+  stepDrawFbx(dt, hasTarget) {
+    if (!this.fbxReady) return;
+    if (!hasTarget) { this.phase = 'idle'; this.playArcher('walk'); return; }
+
+    if (this.phase === 'idle') { this.phase = 'draw'; this.phaseT = 0; }
+    this.phaseT += dt;
+
+    if (this.phase === 'draw') {
+      if (this.phaseT >= this.drawTime) {
+        const fired = this.releaseArrow();       // 放箭（PlayerArcher 籌碼不足時回 false）
+        if (fired) {
+          this.playArcher('shot');
+          this.phase = 'recover';
+          this.phaseT = 0;
+        } else {
+          this.phase = 'idle';                   // 沒射出 → 繼續走路
+          this.playArcher('walk');
+        }
+      }
+    } else if (this.phase === 'recover') {
+      if (this.phaseT >= this.recoverTime) {
+        this.phase = 'idle';
+        this.playArcher('walk');                 // 放箭動作結束，回到走路
+      }
+    }
+  }
+
   // 拉弓 → 放箭 → 回復 的狀態機
   stepDraw(dt, hasTarget) {
+    if (this.fbxArcher) return this.stepDrawFbx(dt, hasTarget);
     const parts = this.turret.userData.parts;
 
     if (!hasTarget) {
@@ -164,8 +241,9 @@ export class AIPlayer {
     this.applyDraw(this.drawVal);
   }
 
-  // 依拉弓進度移動 nock、拉伸弓弦
+  // 依拉弓進度移動 nock、拉伸弓弦（FBX 弓將無弓弦部件，略過）
   applyDraw(v) {
+    if (this.fbxArcher) return;
     const p = this.turret.userData.parts;
     const nockZ = p.restZ + v * this.maxDraw;
     p.nock.position.z = nockZ;
@@ -181,6 +259,7 @@ export class AIPlayer {
     const dir = new THREE.Vector3().subVectors(this.target, muzzleWorld).normalize();
     const power = 1 + Math.floor(this.betIndex / 2);
     this.bulletMgr.fire(muzzleWorld, dir, power, this.general.blade, this);
+    return true;
   }
 }
 
@@ -243,6 +322,7 @@ export class PlayerArcher extends AIPlayer {
 
   // 覆寫瞄準：有鎖定目標則優先，否則自動挑最近的
   update(dt) {
+    if (this.mixer) this.mixer.update(dt);
     if (this.selected && (this.selected.dead || this.selected.removed)) this.selected = null;
     this.retargetCooldown -= dt;
     if (this.selected) {
@@ -273,12 +353,13 @@ export class PlayerArcher extends AIPlayer {
   pay() {}
 
   releaseArrow() {
-    if (!this.attemptShot || !this.attemptShot()) return;   // 籌碼不足 → 不放箭
+    if (!this.attemptShot || !this.attemptShot()) return false;   // 籌碼不足 → 不放箭
     const muzzleWorld = new THREE.Vector3();
     this.turret.userData.muzzle.getWorldPosition(muzzleWorld);
     const dir = new THREE.Vector3().subVectors(this.target, muzzleWorld).normalize();
     const power = 1 + Math.floor(this.betIndex / 2);
     this.bulletMgr.fire(muzzleWorld, dir, power, this.general.blade, null); // owner=null → 中座玩家
+    return true;
   }
 }
 

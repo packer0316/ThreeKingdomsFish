@@ -4,6 +4,7 @@ import { makeSoldier, makeBoss, makeTitleLabel, makeSpeechBubble } from './model
 import { spawnSoldier } from './soldierModel.js';
 import { spawnHuaxiong } from './huaxiongModel.js';
 import { spawnCaocao } from './caocaoModel.js';
+import { DEV } from './dev.js';
 
 // 使用專用 FBX 模型的 Boss（進場動作 / 走路 / 受擊演出 / 倒地皆由動畫驅動）
 const FBX_BOSS_SPAWN = { huaxiong: spawnHuaxiong, caocao: spawnCaocao };
