@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { randomSword } from './swordModels.js';
 
 // 玩家武將大招（每次攻擊約 5% 機率觸發）------------------------------
 // 全部為「全場範圍技」：對場上所有小兵各造成一次（多波）機率性擊殺，
@@ -20,25 +21,35 @@ class SkySwords {
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    this.bladeGeo = new THREE.BoxGeometry(0.16, 2.2, 0.1);
-    this.guardGeo = new THREE.BoxGeometry(0.52, 0.14, 0.18);
-    this.gripGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1);
-    this.mat = new THREE.MeshBasicMaterial({ color: 0xcdd8ea, transparent: true, opacity: 1 });
-    this.goldMat = new THREE.MeshBasicMaterial({ color: 0xe0b24a, transparent: true, opacity: 1 });
+    // 程序化備援（FBX 尚未載好時使用）
+    this.fbBladeGeo = new THREE.BoxGeometry(0.16, 2.2, 0.1);
+    this.fbGuardGeo = new THREE.BoxGeometry(0.52, 0.14, 0.18);
+    this.fallbackMats = [];
 
     this.swords = [];
     for (let i = 0; i < 30; i++) {
       const s = new THREE.Group();
-      const blade = new THREE.Mesh(this.bladeGeo, this.mat);
-      const guard = new THREE.Mesh(this.guardGeo, this.goldMat); guard.position.y = 1.0;
-      const grip = new THREE.Mesh(this.gripGeo, this.goldMat); grip.position.y = 1.35;
-      s.add(blade, guard, grip);
+      let mats;
+      const sword = randomSword();   // 1/3 機率取 3 把 FBX 之一
+      if (sword) {
+        s.add(sword.group);
+        mats = sword.mats;
+        mats.forEach((m) => { m.transparent = true; });
+      } else {
+        const bm = new THREE.MeshBasicMaterial({ color: 0xcdd8ea, transparent: true, opacity: 1 });
+        const gm = new THREE.MeshBasicMaterial({ color: 0xe0b24a, transparent: true, opacity: 1 });
+        const blade = new THREE.Mesh(this.fbBladeGeo, bm); blade.position.y = 1.1;
+        const guard = new THREE.Mesh(this.fbGuardGeo, gm); guard.position.y = 2.1;
+        s.add(blade, guard);
+        mats = [bm, gm];
+        this.fallbackMats.push(bm, gm);
+      }
       const x = field.minX + Math.random() * (field.maxX - field.minX);
       const z = field.minZ + Math.random() * (field.maxZ - field.minZ);
       s.position.set(x, 15 + Math.random() * 10, z);
-      s.rotation.y = Math.random() * Math.PI;
+      s.rotation.y = Math.random() * Math.PI * 2;
       this.group.add(s);
-      this.swords.push({ s, vy: 0, groundY: 1.05, landed: false, delay: Math.random() * 0.4, tilt: (Math.random() - 0.5) * 0.5 });
+      this.swords.push({ s, mats, vy: 0, groundY: -1.4, landed: false, delay: Math.random() * 0.4, tilt: (Math.random() - 0.5) * 0.5 });
     }
     this.waves = [{ t: 0.5, p: 8, done: false }, { t: 0.85, p: 7, done: false }];
   }
@@ -58,15 +69,15 @@ class SkySwords {
 
     if (this.time > this.life - 0.55) {
       const k = Math.max(0, (this.life - this.time) / 0.55);
-      this.mat.opacity = k; this.goldMat.opacity = k;
+      for (const o of this.swords) for (const m of o.mats) { m.transparent = true; m.opacity = k; }
     }
     return this.time < this.life;
   }
 
   dispose() {
     this.scene.remove(this.group);
-    this.bladeGeo.dispose(); this.guardGeo.dispose(); this.gripGeo.dispose();
-    this.mat.dispose(); this.goldMat.dispose();
+    this.fbBladeGeo.dispose(); this.fbGuardGeo.dispose();
+    for (const o of this.swords) for (const m of o.mats) m.dispose();
   }
 }
 

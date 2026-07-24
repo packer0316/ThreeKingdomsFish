@@ -103,7 +103,7 @@ function build() {
   };
   model.traverse((o) => {
     if (!o.isMesh) return;
-    o.castShadow = false;
+    o.castShadow = true;
     o.receiveShadow = false;
     o.frustumCulled = false;
     o.material = Array.isArray(o.material) ? o.material.map(toLambert) : toLambert(o.material);
