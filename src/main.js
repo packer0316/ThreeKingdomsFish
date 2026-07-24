@@ -107,6 +107,11 @@ function runRoomTransition(rebuild) {
   }, 1000);
 }
 const BOSS_LABEL_HEIGHT = 8.1;   // Boss 頭頂名牌的世界高度（紅纓頂之上）
+// 各 Boss 名牌高度：華雄 FBX 放大 3 倍後較高，名牌需再抬高避免遮住模型
+const BOSS_LABEL_HEIGHTS = { huaxiong: 10.8 };
+function bossLabelHeight(boss) {
+  return BOSS_LABEL_HEIGHTS[boss.def.id] || BOSS_LABEL_HEIGHT;
+}
 
 // ---------- 中座玩家：近戰武將（呂布/關羽）+ 弓將（黃忠，原地射擊）----------
 const hero = new MeleeGeneral(scene, GENERALS[0], enemyMgr, attemptSlash);
@@ -517,7 +522,7 @@ function loop() {
   bossPlate.update(
     dt,
     boss,
-    boss ? worldToScreen(boss.mesh.position.clone().setY(BOSS_LABEL_HEIGHT)) : null
+    boss ? worldToScreen(boss.mesh.position.clone().setY(bossLabelHeight(boss))) : null
   );
 
   renderer.render(scene, camera);

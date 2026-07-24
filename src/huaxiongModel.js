@@ -11,8 +11,9 @@ const FBX_URL = BASE + 'models/huashong/Meshy_AI_three_kingdoms_genera_biped_Mes
 const TEX_URL = BASE + 'models/huashong/Meshy_AI_three_kingdoms_genera_biped_texture_0.png';
 
 const BASE_HEIGHT = 3.3;   // 正規化基準高度（同一般武將）
-const SCALE_MULT = 1.6;    // 放大 1.6 倍
+const SCALE_MULT = 3;      // 放大 3 倍
 const MODEL_YAW = 0;       // 正面方向修正（弧度）
+const BRIGHTEN = 0.45;     // 自發光提亮強度（0 = 純受光，越高越亮）
 
 let template = null;
 let loading = null;
@@ -70,7 +71,14 @@ function build() {
   const toLambert = (m) => {
     const tex = m ? (m.map || m.matcap || m.emissiveMap || null) : null;
     if (tex) tex.colorSpace = THREE.SRGBColorSpace;
-    return new THREE.MeshLambertMaterial({ map: tex, color: tex ? 0xffffff : new THREE.Color(0xcccccc) });
+    // 以貼圖自發光提亮：陰影面不再死黑，整體亮度不受場景光壓暗
+    return new THREE.MeshLambertMaterial({
+      map: tex,
+      color: tex ? 0xffffff : new THREE.Color(0xcccccc),
+      emissive: 0xffffff,
+      emissiveMap: tex,
+      emissiveIntensity: BRIGHTEN,
+    });
   };
   model.traverse((o) => {
     if (!o.isMesh) return;

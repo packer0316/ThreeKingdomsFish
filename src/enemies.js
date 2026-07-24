@@ -3,6 +3,10 @@ import { ENEMY_TYPES, FIELD, KILL_CHANCE, BOSS_KILL_FACTOR } from './config.js';
 import { makeSoldier, makeBoss, makeTitleLabel, makeSpeechBubble } from './models.js';
 import { spawnSoldier } from './soldierModel.js';
 import { spawnHuaxiong } from './huaxiongModel.js';
+import { spawnCaocao } from './caocaoModel.js';
+
+// 使用專用 FBX 模型的 Boss（進場動作 / 走路 / 受擊演出 / 倒地皆由動畫驅動）
+const FBX_BOSS_SPAWN = { huaxiong: spawnHuaxiong, caocao: spawnCaocao };
 
 // 敵人物件與生成管理 --------------------------------------------
 
@@ -35,10 +39,10 @@ export class Enemy {
     this.dying = false;      // 播放擊倒動作中（播完才真正移除）
     this.deathT = 0;
 
-    if (isBoss && def.id === 'huaxiong') {
-      // 華雄改用專用 FBX：空群組佔位，載好後掛入（進場/走路/擊倒由 BossEnemy 控制）
+    if (isBoss && FBX_BOSS_SPAWN[def.id]) {
+      // 專用 FBX Boss（華雄 / 曹操）：空群組佔位，載好後掛入（進場/走路/擊倒由 BossEnemy 控制）
       this.mesh = new THREE.Group();
-      spawnHuaxiong((inst) => {
+      FBX_BOSS_SPAWN[def.id]((inst) => {
         if (this.removed) return;
         this.mesh.add(inst.model);
         this.mixer = inst.mixer;
@@ -176,17 +180,20 @@ export class Enemy {
   }
 
   flash() {
-    // 首次命中時蒐集一次材質清單，之後重複使用；只用一個計時器復原
+    // 首次命中時蒐集一次材質清單（記下原本的 emissive，復原時還原而非設黑，
+    // 以免蓋掉靠自發光提亮的材質，如華雄 FBX）
     if (!this._flashMats) {
       this._flashMats = [];
       this.mesh.traverse((o) => {
-        if (o.isMesh && o.material && o.material.emissive) this._flashMats.push(o.material);
+        if (o.isMesh && o.material && o.material.emissive) {
+          this._flashMats.push({ m: o.material, orig: o.material.emissive.getHex() });
+        }
       });
     }
-    for (const m of this._flashMats) m.emissive.setHex(0x882020);
+    for (const f of this._flashMats) f.m.emissive.setHex(0x882020);
     clearTimeout(this._flashT);
     this._flashT = setTimeout(() => {
-      for (const m of this._flashMats) m.emissive.setHex(0x000000);
+      for (const f of this._flashMats) f.m.emissive.setHex(f.orig);
     }, 90);
   }
 
@@ -205,12 +212,35 @@ export class BossEnemy extends Enemy {
     this.targetYaw = this.mesh.rotation.y;
     this.pickWaypoint();
 
-    // FBX 華雄：進場先原地 Sword_Shout，播完才開始走路
-    this.isFbxBoss = def.id === 'huaxiong';
-    this.entryDone = !this.isFbxBoss;      // 程序化 Boss（曹操）不需進場 POSE
+    // FBX Boss（華雄 / 曹操）：進場先原地播進場動作，播完才開始走路
+    this.isFbxBoss = !!FBX_BOSS_SPAWN[def.id];
+
+    // FBX Boss 會在出生點原地表演進場動作，若出生在邊界會看不到，
+    // 故改為在關前中央區域現身（面向鏡頭）。
+    if (this.isFbxBoss) {
+      this.mesh.position.set(
+        (Math.random() * 2 - 1) * (FIELD.maxX - 14),
+        0,
+        FIELD.minZ + 4 + Math.random() * (FIELD.maxZ - FIELD.minZ - 8)
+      );
+      this.mesh.rotation.y = 0;
+    }
+    // 華雄：抵達定點偶爾演 Sword_Judgment；曹操：受擊時偶爾揮刀（Right_Hand_Sword_Slash）
+    this.judgmentAtWaypoint = def.id === 'huaxiong';
+    this.slashOnHit = def.id === 'caocao';
+    this.entryDone = !this.isFbxBoss;      // 非 FBX Boss 不需進場 POSE
     this.entryReady = false;
     this.entryT = 0;
     this.oneShotT = 0;                     // 一次性演出（Sword_Judgment）剩餘秒數
+  }
+
+  // 被攻擊：閃紅之餘，曹操偶爾原地揮刀（Right_Hand_Sword_Slash），播完接回走路
+  hit(power = 1) {
+    if (this.slashOnHit && !this.dead && this.entryDone && this.oneShotT <= 0
+        && this.actions.judgment && Math.random() < 0.3) {
+      this.playJudgment();
+    }
+    return super.hit(power);
   }
 
   // 隨機演出 Sword_Judgment（原地一次），播完回到走路
@@ -313,7 +343,7 @@ export class BossEnemy extends Enemy {
       if (dist < 0.6) {
         this.pickWaypoint();
         // 抵達定點：約 5% 機率演一次 Sword_Judgment，否則停步耀武
-        if (this.actions.judgment && Math.random() < 0.05) {
+        if (this.judgmentAtWaypoint && this.actions.judgment && Math.random() < 0.05) {
           this.playJudgment();
         } else {
           this.pauseT = 1.2 + Math.random() * 1.8;

@@ -4,7 +4,7 @@ export const START_COINS = 100000;
 
 // 每次命中「擊殺」的機率（魚機式捕獲率）。約 5%，敵將更難擊殺。
 export const KILL_CHANCE = 0.05;
-export const BOSS_KILL_FACTOR = 1.0; // 敵將擊殺機率 = KILL_CHANCE × 此值（0.05 × 1.0 = 5%）
+export const BOSS_KILL_FACTOR = 0.3; // 敵將擊殺機率 = KILL_CHANCE × 此值（0.05 × 0.3 = 1.5%）
 
 // 下注階梯
 export const BET_LEVELS = [10, 20, 50, 100, 200, 500, 1000];
