@@ -152,7 +152,10 @@ export class Enemy {
   hit(power = 1) {
     this.hp -= power; // 仍記錄，僅供參考
     this.flash();     // 受擊閃紅
-    const chance = this.killChance * (1 + (power - 1) * 0.15);
+    if (DEV.oneHitKill) return true;                      // 開發者：一擊斃殺
+    const chance = this.isBoss
+      ? DEV.bossKillChance                                // 開發者：Boss 死亡機率可調
+      : this.killChance * (1 + (power - 1) * 0.15);
     return Math.random() < chance;
   }
 

@@ -11,6 +11,7 @@ import { BossShow, hasBossShow } from './bossshow.js';
 import { BossComing } from './bosscoming.js';
 import { AIPlayer, MeleeGeneral, PlayerArcher } from './players.js';
 import { CHARACTERS } from './characters.js';
+import { DevPanel } from './dev.js';
 import { GENERALS, FIELD, START_COINS, AI_PLAYERS, SEAT_X, ROOMS, sceneById } from './config.js';
 
 // 主程式：組裝場景、輸入、遊戲迴圈 -------------------------------
@@ -216,6 +217,9 @@ recruit.onResult = (list, hours) => {
   // 兩名援軍列陣玩家座位兩側，自動作戰指定時長
   summons.summonPair(list, (hours || 1) * SUMMON_SEC_PER_HOUR);
 };
+
+// ---------- 開發者工具（右上角圓形「開」按鈕）----------
+const devPanel = new DevPanel();
 
 // ---------- 左右兩側 AI 陪玩玩家（遠程砲台）----------
 const aiPlayers = AI_PLAYERS.map(
